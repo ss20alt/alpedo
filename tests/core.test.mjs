@@ -9,6 +9,7 @@ import {
 } from "../src/lib/finance-engine.ts";
 import { getParaguayDateString, formatParaguayMonthLabel } from "../src/lib/date-utils.ts";
 import { percentile75 } from "../src/lib/performance.ts";
+import { rankStreakParticipants } from "../src/lib/streak-leaderboard.ts";
 
 test("el tablero no inventa ingresos cuando la cuenta está vacía", () => {
   const metrics = calculateFinancialMetrics([]);
@@ -76,4 +77,18 @@ test("el percentil 75 resume mediciones móviles sin valores inválidos", () => 
   assert.equal(percentile75([]), null);
   assert.equal(percentile75([120, 90, 250, 180]), 180);
   assert.equal(percentile75([100, Number.NaN, -1]), 100);
+});
+
+test("el ranking de rachas ordena días, asigna empates y descarta datos inválidos", () => {
+  assert.deepEqual(rankStreakParticipants([
+    { displayName: "Ana", days: 8 },
+    { displayName: "Beto", days: 12 },
+    { displayName: "Caro", days: 8 },
+    { displayName: "   ", days: 99 },
+    { displayName: "Dani", days: -1 },
+  ]), [
+    { displayName: "Beto", days: 12, rank: 1 },
+    { displayName: "Ana", days: 8, rank: 2 },
+    { displayName: "Caro", days: 8, rank: 2 },
+  ]);
 });

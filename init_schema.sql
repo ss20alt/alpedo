@@ -70,17 +70,23 @@ CREATE TABLE IF NOT EXISTS couples_goals (
 
 -- Keep existing installations compatible while assigning legacy goals to user 1.
 ALTER TABLE couples_goals ADD COLUMN IF NOT EXISTS user_id INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE couples_goals ADD COLUMN IF NOT EXISTS partner_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_couples_goals_user_status ON couples_goals (user_id, status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_couples_goals_partner_status ON couples_goals (partner_user_id, status, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_couples_goals_one_active_partner ON couples_goals (partner_user_id) WHERE status = 'active' AND partner_user_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS couples_contributions (
   id SERIAL PRIMARY KEY,
   goal_id INTEGER REFERENCES couples_goals(id) ON DELETE CASCADE,
   contributor_name VARCHAR(150) NOT NULL,
+  contributor_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
   amount NUMERIC(15, 2) NOT NULL,
   note VARCHAR(255),
   date DATE DEFAULT CURRENT_DATE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+ALTER TABLE couples_contributions ADD COLUMN IF NOT EXISTS contributor_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_couples_contributions_goal_user_date ON couples_contributions (goal_id, contributor_user_id, date DESC);
 
 -- Rachas con Amigos & Duelos
 CREATE TABLE IF NOT EXISTS friend_streaks (
@@ -94,6 +100,14 @@ CREATE TABLE IF NOT EXISTS friend_streaks (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   UNIQUE (user_id, friend_code)
 );
+
+CREATE TABLE IF NOT EXISTS streak_leaderboard_optins (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  display_name VARCHAR(40) NOT NULL,
+  enabled BOOLEAN NOT NULL DEFAULT FALSE,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_streak_leaderboard_enabled ON streak_leaderboard_optins (enabled, updated_at DESC);
 
 -- Default Settings
 INSERT INTO settings (key, value) VALUES 

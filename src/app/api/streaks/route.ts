@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { getParaguayDateString } from "@/lib/date-utils";
+import { rankStreakParticipants } from "@/lib/streak-leaderboard";
 
 export const dynamic = "force-dynamic";
 
@@ -105,6 +106,43 @@ async function getStreakDays(userId: number, initializeTracking = false): Promis
     : { days: null, source: "unknown" };
 }
 
+async function getCommunityLeaderboard() {
+  const optIns = await db.query<{ user_id: number; display_name: string }>(
+    "SELECT user_id, display_name FROM streak_leaderboard_optins WHERE enabled = TRUE ORDER BY updated_at ASC"
+  );
+  if (optIns.length === 0) return [];
+
+  const userIds = optIns.map(({ user_id }) => Number(user_id));
+  const placeholders = userIds.map(() => "?").join(", ");
+  const lastActivityRows = await db.query<{ user_id: number | null; date: string }>(
+    `SELECT user_id, MAX(date)::text AS date
+     FROM transactions
+     WHERE type = 'expense' AND category = 'al_pedo'
+       AND (user_id IN (${placeholders}) OR (user_id IS NULL AND ? = 1))
+     GROUP BY user_id`,
+    [...userIds, userIds.includes(1) ? 1 : 0]
+  );
+  const trackingRows = await db.query<{ key: string; value: string }>(
+    "SELECT key, value FROM settings WHERE key LIKE 'streak_tracking_start_%'"
+  );
+  const lastActivityByUser = new Map(lastActivityRows.map((row) => [Number(row.user_id), row.date]));
+  const legacyLastActivity = lastActivityByUser.get(0);
+  const trackingByUser = new Map(
+    trackingRows.map(({ key, value }) => [Number(key.replace("streak_tracking_start_", "")), value])
+  );
+  const today = getParaguayDateString();
+
+  const ranked = rankStreakParticipants(optIns.map(({ user_id, display_name }) => {
+    const id = Number(user_id);
+    const lastActivity = lastActivityByUser.get(id) || (id === 1 ? legacyLastActivity : undefined);
+    const trackingStart = trackingByUser.get(id);
+    const days = lastActivity ? daysBetween(lastActivity, today) : trackingStart ? daysBetween(trackingStart, today) : 0;
+    return { displayName: display_name, days };
+  }));
+
+  return ranked;
+}
+
 async function findAccountByFriendCode(code: string) {
   const setting = await db.queryOne<FriendCodeSetting>(
     `SELECT key, value
@@ -127,13 +165,18 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
   try {
-    const [myFriendCode, myStreakDays, friendRows] = await Promise.all([
+    const [myFriendCode, myStreakDays, friendRows, leaderboardPreference, leaderboard] = await Promise.all([
       getOrCreateFriendCode(user.id),
       getStreakDays(user.id, true),
       db.query<{ friend_code: string; friend_name: string }>(
         "SELECT friend_code, friend_name FROM friend_streaks WHERE user_id = ? ORDER BY friend_name ASC",
         [user.id]
       ),
+      db.queryOne<{ display_name: string }>(
+        "SELECT display_name FROM streak_leaderboard_optins WHERE user_id = ? AND enabled = TRUE",
+        [user.id]
+      ),
+      getCommunityLeaderboard(),
     ]);
 
     const friends = await Promise.all(
@@ -154,7 +197,9 @@ export async function GET() {
         myStreakDays: myStreakDays.days ?? 0,
         streakSource: myStreakDays.source,
         friends,
-        leaderboard: [],
+        leaderboardEnabled: Boolean(leaderboardPreference),
+        leaderboardName: leaderboardPreference?.display_name || "",
+        leaderboard,
       },
       { headers: { "Cache-Control": "no-store, max-age=0" } }
     );
@@ -210,6 +255,27 @@ export async function POST(req: Request) {
 
       await db.execute("DELETE FROM friend_streaks WHERE user_id = ? AND friend_code = ?", [user.id, code]);
       return NextResponse.json({ success: true });
+    }
+
+    if (body.action === "leaderboard_opt_in") {
+      if (body.enabled === false) {
+        await db.execute("DELETE FROM streak_leaderboard_optins WHERE user_id = ?", [user.id]);
+        return NextResponse.json({ success: true, enabled: false });
+      }
+
+      const displayName = typeof body.display_name === "string" ? body.display_name.trim().replace(/\s+/g, " ") : "";
+      if (displayName.length < 2 || displayName.length > 30) {
+        return NextResponse.json({ error: "Elegí un apodo de 2 a 30 caracteres para el ranking." }, { status: 400 });
+      }
+
+      await getStreakDays(user.id, true);
+      await db.execute(
+        `INSERT INTO streak_leaderboard_optins (user_id, display_name, enabled, updated_at)
+         VALUES (?, ?, TRUE, NOW())
+         ON CONFLICT (user_id) DO UPDATE SET display_name = EXCLUDED.display_name, enabled = TRUE, updated_at = NOW()`,
+        [user.id, displayName]
+      );
+      return NextResponse.json({ success: true, enabled: true });
     }
 
     return NextResponse.json({ error: "Acción no válida" }, { status: 400 });

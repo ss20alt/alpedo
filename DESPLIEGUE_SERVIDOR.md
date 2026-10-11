@@ -10,6 +10,12 @@ La aplicación usa PostgreSQL. El contenedor de Docker contiene solo Next.js; la
 4. Configurá HTTPS en el proxy público y después definí `ENABLE_HTTPS=true`. El proxy debe redirigir HTTP a HTTPS; evitá publicar directamente el puerto de Next.js.
 5. Configurá `GEMINI_API_KEY` solo si querés respuestas de IA. La evaluación numérica funciona sin esa clave.
 
+Para actualizar una instalación existente con metas vinculadas y el ranking voluntario de rachas, respaldá PostgreSQL y aplicá antes de desplegar la app:
+
+```bash
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f migrations/20261011_shared_couples_and_streak_leaderboard.sql
+```
+
 ## Ejecución
 
 ```bash
@@ -32,6 +38,6 @@ El archivo `.env.local` sirve para desarrollo local y nunca debe subirse al repo
 - Cambiá el PIN de cualquier cuenta de demostración existente. La instalación nueva ya no crea una cuenta ni movimientos de ejemplo.
 - Probá registro, inicio/cierre de sesión, cambio de PIN, creación/edición/borrado de movimientos y restauración de un respaldo en una base de ensayo.
 - Hacé respaldo de PostgreSQL y ensayá la restauración. El JSON descargable complementa el respaldo de base de datos.
-- Revisá las limitaciones de la versión antes de lanzar: las metas de pareja no sincronizan dos cuentas, las rachas cuentan días desde el último gasto registrado y el simulador de préstamos no incluye seguros ni comisiones.
+- Revisá las limitaciones de la versión antes de lanzar: las rachas cuentan días desde el último gasto registrado y el simulador de préstamos no incluye seguros ni comisiones. El ranking de rachas es voluntario: solo publica el apodo elegido y los días de racha.
 
 El código de esta carpeta no actualiza automáticamente la publicación del VPS. Desplegá solo después de validar las variables, HTTPS, la migración y la rotación de credenciales.

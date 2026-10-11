@@ -27,6 +27,9 @@ interface StreaksData {
   myStreakDays: number;
   streakSource: "last_al_pedo" | "tracking_start" | "unknown";
   friends: FriendStreak[];
+  leaderboardEnabled: boolean;
+  leaderboardName: string;
+  leaderboard: Array<{ rank: number; displayName: string; days: number }>;
 }
 
 async function readApiError(response: Response, fallback: string) {
@@ -50,6 +53,8 @@ export default function StreaksTab() {
   const [isAdding, setIsAdding] = useState(false);
   const [pendingDeleteCode, setPendingDeleteCode] = useState<string | null>(null);
   const [friendToDelete, setFriendToDelete] = useState<FriendStreak | null>(null);
+  const [leaderboardName, setLeaderboardName] = useState("");
+  const [isSavingLeaderboard, setIsSavingLeaderboard] = useState(false);
 
   const fetchStreaksData = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true);
@@ -57,7 +62,9 @@ export default function StreaksTab() {
     try {
       const response = await fetch("/api/streaks", { cache: "no-store" });
       if (!response.ok) throw new Error(await readApiError(response, "No pudimos cargar Rachas."));
-      setData((await response.json()) as StreaksData);
+      const nextData = (await response.json()) as StreaksData;
+      setData(nextData);
+      setLeaderboardName(nextData.leaderboardName || "");
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : "No pudimos cargar Rachas.");
     } finally {
@@ -154,6 +161,47 @@ export default function StreaksTab() {
       setActionError(error instanceof Error ? error.message : "No se pudo eliminar el duelo.");
     } finally {
       setPendingDeleteCode(null);
+    }
+  };
+
+  const handleLeaderboardPreference = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsSavingLeaderboard(true);
+    setActionError("");
+    setFeedback("");
+    try {
+      const response = await fetch("/api/streaks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "leaderboard_opt_in", enabled: true, display_name: leaderboardName }),
+      });
+      if (!response.ok) throw new Error(await readApiError(response, "No se pudo activar el ranking."));
+      setFeedback("Tu apodo y racha ya aparecen en el ranking. Podés salir cuando quieras.");
+      await fetchStreaksData(false);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "No se pudo actualizar el ranking.");
+    } finally {
+      setIsSavingLeaderboard(false);
+    }
+  };
+
+  const handleLeaveLeaderboard = async () => {
+    setIsSavingLeaderboard(true);
+    setActionError("");
+    setFeedback("");
+    try {
+      const response = await fetch("/api/streaks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "leaderboard_opt_in", enabled: false }),
+      });
+      if (!response.ok) throw new Error(await readApiError(response, "No se pudo salir del ranking."));
+      setFeedback("Tu apodo y racha ya no aparecen en el ranking comunitario.");
+      await fetchStreaksData(false);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "No se pudo salir del ranking.");
+    } finally {
+      setIsSavingLeaderboard(false);
     }
   };
 
@@ -410,16 +458,66 @@ export default function StreaksTab() {
         )}
       </section>
 
-      <section className="flex items-start gap-3 rounded-[22px] border border-slate-200 bg-white p-4 shadow-sm sm:rounded-[24px] sm:p-5">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
-          <Trophy className="h-5 w-5" />
+      <section className="rounded-[22px] border border-amber-200 bg-white p-4 shadow-sm sm:rounded-[24px] sm:p-5">
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+            <Trophy className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <h3 className="text-sm font-extrabold text-slate-800">Ranking comunitario</h3>
+            <p className="mt-1 text-xs leading-relaxed text-slate-500">
+              Solo participan quienes se suman voluntariamente. Se muestra el apodo y los días de racha; nunca gastos, movimientos, saldos ni correo.
+            </p>
+          </div>
         </div>
-        <div>
-          <h3 className="text-sm font-extrabold text-slate-800">Ranking comunitario</h3>
-          <p className="mt-1 text-xs leading-relaxed text-slate-500">
-            La clasificación todavía no está conectada a participantes reales. Por ahora, tus comparaciones son privadas y solo incluyen los amigos que agregues.
+
+        <form onSubmit={handleLeaderboardPreference} className="mt-4 rounded-2xl border border-slate-100 bg-slate-50 p-3 sm:flex sm:items-end sm:gap-3">
+          <div className="min-w-0 flex-1">
+            <label htmlFor="streak-leaderboard-name" className="block text-xs font-bold text-slate-700">
+              {data.leaderboardEnabled ? "Tu apodo público" : "Elegí un apodo para participar"}
+            </label>
+            <input
+              id="streak-leaderboard-name"
+              type="text"
+              required
+              minLength={2}
+              maxLength={30}
+              autoComplete="nickname"
+              value={leaderboardName}
+              onChange={(event) => setLeaderboardName(event.target.value)}
+              placeholder="Ej.: Mate y constancia"
+              className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-900 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
+            />
+          </div>
+          <button type="submit" disabled={isSavingLeaderboard || !leaderboardName.trim()} className="mt-2 inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-amber-600 px-4 text-xs font-extrabold text-white transition hover:bg-amber-700 disabled:cursor-wait disabled:opacity-60 active:scale-[0.98] sm:mt-0 sm:w-auto">
+            {isSavingLeaderboard ? "Guardando…" : data.leaderboardEnabled ? "Actualizar apodo" : "Activar y publicar mi racha"}
+          </button>
+          {data.leaderboardEnabled && (
+            <button type="button" onClick={() => void handleLeaveLeaderboard()} disabled={isSavingLeaderboard} className="mt-2 inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600 transition hover:bg-slate-100 disabled:opacity-60 sm:mt-0 sm:w-auto">
+              Salir del ranking
+            </button>
+          )}
+        </form>
+
+        {data.leaderboard.length > 0 ? (
+          <ol aria-label="Ranking comunitario de rachas" className="mt-4 space-y-2">
+            {data.leaderboard.map((participant, index) => (
+              <li key={`${participant.rank}-${participant.days}-${participant.displayName}-${index}`} className="flex min-h-12 items-center justify-between gap-3 rounded-xl border border-slate-100 bg-white px-3 py-2">
+                <span className="flex min-w-0 items-center gap-2 text-sm font-bold text-slate-800">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-50 text-xs font-black text-amber-700">{participant.rank}</span>
+                  <span className="truncate">{participant.displayName}</span>
+                </span>
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-orange-50 px-2.5 py-1 font-mono text-sm font-black tabular-nums text-orange-700">
+                  <Flame className="h-3.5 w-3.5 fill-orange-500 text-orange-500" /> {participant.days} <span className="font-sans text-[10px]">días</span>
+                </span>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="mt-4 rounded-xl border border-dashed border-slate-200 px-3 py-4 text-center text-xs leading-relaxed text-slate-500">
+            Todavía no hay participantes. Si te sumás, tu racha aparecerá con el apodo que elijas.
           </p>
-        </div>
+        )}
       </section>
       {friendToDelete && <ConfirmDialog title="¿Eliminar este duelo?" description={`Se quitará el duelo con ${friendToDelete.friend_name}.`} confirmLabel="Eliminar" destructive onCancel={() => setFriendToDelete(null)} onConfirm={() => void handleDeleteFriend(friendToDelete)} />}
     </div>

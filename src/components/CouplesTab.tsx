@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Heart,
   Plane,
@@ -29,13 +29,17 @@ interface CouplesGoal {
   target_amount: number;
   current_amount: number;
   target_date?: string;
-  invite_code: string;
+  invite_code: string | null;
+  partner_user_id?: number | null;
   partner_name: string;
   creator_name: string;
   status: string;
+  isOwner: boolean;
+  isShared: boolean;
+  myContributorName: string;
   progressPercent: number;
   remainingAmount: number;
-  totalMe: number;
+  totalCreator: number;
   totalPartner: number;
 }
 
@@ -59,6 +63,8 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
   const [loadError, setLoadError] = useState("");
   const [notice, setNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [confirmCloseGoal, setConfirmCloseGoal] = useState(false);
+  const [joinCode, setJoinCode] = useState("");
+  const [isJoining, setIsJoining] = useState(false);
 
   // New goal form state
   const [showNewGoal, setShowNewGoal] = useState(false);
@@ -70,29 +76,27 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
 
   // Contribution form state
   const [contribAmount, setContribAmount] = useState("");
-  const [contribBy, setContribBy] = useState("Vos");
   const [contribNote, setContribNote] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const fetchCouplesData = async () => {
+  const fetchCouplesData = useCallback(async (showLoading = true) => {
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
       setLoadError("");
-      const res = await fetch("/api/couples");
+      const res = await fetch("/api/couples", { cache: "no-store" });
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.error || "No se pudieron cargar las metas de pareja.");
       }
       setGoal(data.goal);
-      setContribBy(data.goal?.creator_name || "Vos");
       setContributions(data.contributions || []);
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudo cargar la meta compartida.";
       setLoadError(message);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
-  };
+  }, []);
 
   const resetNewGoal = () => {
     setTitle("");
@@ -105,8 +109,17 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
 
   useEffect(() => {
     const timer = window.setTimeout(() => void fetchCouplesData(), 0);
-    return () => window.clearTimeout(timer);
-  }, []);
+    const interval = window.setInterval(() => {
+      if (!document.hidden) void fetchCouplesData(false);
+    }, 30_000);
+    const refreshOnFocus = () => void fetchCouplesData(false);
+    window.addEventListener("focus", refreshOnFocus);
+    return () => {
+      window.clearTimeout(timer);
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refreshOnFocus);
+    };
+  }, [fetchCouplesData]);
 
   const handleCreateGoal = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -152,7 +165,6 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
         body: JSON.stringify({
           action: "contribute",
           goal_id: goal.id,
-          contributor_name: contribBy,
           amount: contribAmount,
           note: contribNote,
         }),
@@ -174,8 +186,30 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
     }
   };
 
+  const handleJoinGoal = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsJoining(true);
+    setNotice(null);
+    try {
+      const res = await fetch("/api/couples", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "join_goal", invite_code: joinCode }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || "No se pudo vincular la meta. Revisá el código.");
+      setJoinCode("");
+      setNotice({ type: "success", text: "Meta vinculada. Los aportes y el progreso se sincronizan entre las dos cuentas." });
+      await fetchCouplesData();
+    } catch (error) {
+      setNotice({ type: "error", text: error instanceof Error ? error.message : "No se pudo vincular la meta." });
+    } finally {
+      setIsJoining(false);
+    }
+  };
+
   const handleDeleteGoal = async () => {
-    if (!goal) return;
+    if (!goal?.invite_code) return;
     setConfirmCloseGoal(false);
 
     try {
@@ -195,9 +229,10 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
   const formatMoney = (val: number) => Math.round(val || 0).toLocaleString("es-PY");
 
   const copyInvite = async () => {
-    if (!goal) return;
+    const inviteCode = goal?.invite_code;
+    if (!inviteCode) return;
     try {
-      await navigator.clipboard.writeText(goal.invite_code);
+      await navigator.clipboard.writeText(inviteCode);
       setCopied(true);
       setNotice({ type: "success", text: "Código copiado. Podés pegarlo en tu mensaje." });
       window.setTimeout(() => setCopied(false), 2500);
@@ -261,7 +296,7 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
               Metas Compartidas con tu Pareja
             </h2>
             <p className="mt-1 text-sm text-slate-600 max-w-xl font-medium">
-              Ahorren juntos para el viaje de fin de año, el auto o el depto. Cada uno mantiene sus gastos privados y solo comparten el chanchito común.
+              Vinculá dos cuentas para compartir una meta y sus aportes. Los movimientos y saldos personales permanecen privados.
             </p>
           </div>
 
@@ -294,7 +329,7 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
               <span>Aportes privados</span>
             </div>
             <p className="mt-1 text-[11px] text-slate-500 font-medium">
-              Registrá los aportes en esta meta; tus otros movimientos personales quedan aparte.
+              Cada aporte queda identificado con la cuenta que lo registra; tus movimientos personales quedan aparte.
             </p>
           </div>
 
@@ -304,7 +339,7 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
               <span>Compartí el código</span>
             </div>
             <p className="mt-1 text-[11px] text-slate-500 font-medium">
-              Podés copiar el código para compartirlo. La meta aún no se sincroniza entre cuentas.
+              Compartí el código y la otra persona lo acepta desde su cuenta para sincronizar el progreso.
             </p>
           </div>
         </div>
@@ -436,6 +471,28 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
       {/* EMPTY STATE TEMPLATES */}
       {!goal && !showNewGoal && (
         <div className="rounded-[24px] border border-pink-100 bg-white p-4 shadow-[0_4px_24px_rgba(244,63,94,0.04)] text-slate-900 space-y-5 sm:rounded-[28px] sm:p-8 sm:space-y-6">
+          <form onSubmit={handleJoinGoal} className="rounded-2xl border border-pink-200 bg-pink-50/70 p-4 sm:flex sm:items-end sm:gap-3">
+            <div className="min-w-0 flex-1">
+              <label htmlFor="couples-join-code" className="block text-xs font-black text-pink-900">¿Te invitaron a una meta?</label>
+              <p className="mt-1 text-[11px] leading-relaxed text-slate-600">Pegá el código que te compartió tu pareja. Al aceptar, ambos verán el objetivo, los aportes y el progreso.</p>
+              <input
+                id="couples-join-code"
+                type="text"
+                required
+                maxLength={30}
+                autoCapitalize="characters"
+                autoComplete="off"
+                value={joinCode}
+                onChange={(event) => setJoinCode(event.target.value.toUpperCase())}
+                placeholder="Ej.: JUNTOS-AB12CD34"
+                className="mt-2 h-11 w-full rounded-xl border border-pink-200 bg-white px-3 font-mono text-sm font-bold tracking-wide text-slate-900 outline-none focus:border-pink-500 focus:ring-2 focus:ring-pink-100"
+              />
+            </div>
+            <button type="submit" disabled={isJoining || !joinCode.trim()} className="mt-2 inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-rose-600 px-4 text-sm font-extrabold text-white transition hover:bg-rose-700 disabled:cursor-wait disabled:opacity-60 active:scale-[0.98] sm:mt-0 sm:w-auto">
+              {isJoining ? "Vinculando…" : "Aceptar invitación"}
+            </button>
+          </form>
+
           <div className="text-center max-w-md mx-auto space-y-2">
             <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-pink-50 text-3xl shadow-sm border border-pink-100">
               <PiggyBank className="h-7 w-7 text-pink-600" />
@@ -525,6 +582,30 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
       {/* ACTIVE GOAL VIEW */}
       {goal && (
         <div className="space-y-6">
+          {goal.isOwner && !goal.isShared && (
+            <form onSubmit={handleJoinGoal} className="rounded-2xl border border-pink-200 bg-white p-4 shadow-sm sm:flex sm:items-end sm:gap-3">
+              <div className="min-w-0 flex-1">
+                <label htmlFor="couples-join-code-active" className="block text-xs font-black text-pink-900">¿Te invitaron a una meta compartida?</label>
+                <p className="mt-1 text-[11px] leading-relaxed text-slate-600">Al aceptar, tu meta personal actual se archivará con sus aportes guardados.</p>
+                <input
+                  id="couples-join-code-active"
+                  type="text"
+                  required
+                  maxLength={30}
+                  autoCapitalize="characters"
+                  autoComplete="off"
+                  value={joinCode}
+                  onChange={(event) => setJoinCode(event.target.value.toUpperCase())}
+                  placeholder="Código de invitación"
+                  className="mt-2 h-11 w-full rounded-xl border border-pink-200 bg-white px-3 font-mono text-sm font-bold tracking-wide text-slate-900 outline-none focus:border-pink-500 focus:ring-2 focus:ring-pink-100"
+                />
+              </div>
+              <button type="submit" disabled={isJoining || !joinCode.trim()} className="mt-2 inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-rose-600 px-4 text-sm font-extrabold text-white transition hover:bg-rose-700 disabled:cursor-wait disabled:opacity-60 active:scale-[0.98] sm:mt-0 sm:w-auto">
+                {isJoining ? "Vinculando…" : "Aceptar invitación"}
+              </button>
+            </form>
+          )}
+
           {/* Main Shared Goal Card */}
           <div className="relative space-y-5 overflow-hidden rounded-[24px] border border-pink-200/80 bg-white p-4 text-slate-900 shadow-sm sm:rounded-[28px] sm:p-8 sm:space-y-6">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -536,6 +617,9 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
                   <h3 className="break-words text-xl font-black text-slate-900 sm:text-2xl">{goal.title}</h3>
                   <div className="mt-1 flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500">
                     <span>Meta de: <strong>{goal.creator_name || "Vos"}</strong> y <strong>{goal.partner_name}</strong></span>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold ${goal.isShared ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                      {goal.isShared ? "SINCRONIZADA" : "ESPERANDO INVITACIÓN"}
+                    </span>
                     {goal.target_date && (
                       <>
                         <span>•</span>
@@ -550,22 +634,26 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
               </div>
 
               <div className="flex items-center gap-2 self-start">
-                <button
-                  onClick={copyInvite}
-                  aria-label={copied ? "Código de invitación copiado" : "Copiar código de invitación"}
-                  className="flex min-h-11 items-center gap-1.5 rounded-xl border border-pink-200 bg-pink-50 px-3 text-xs font-black text-pink-700 transition hover:bg-pink-100"
-                >
-                  <Share2 className="h-3.5 w-3.5" />
-                  {copied ? "¡Copiado!" : "Copiar código"}
-                </button>
-                <button
-                  onClick={() => setConfirmCloseGoal(true)}
-                  className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-slate-500 transition hover:bg-rose-50 hover:text-rose-600"
-                  aria-label="Cerrar meta compartida"
-                  title="Cerrar meta"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
+                {goal.isOwner && goal.invite_code && !goal.isShared && (
+                  <button
+                    onClick={copyInvite}
+                    aria-label={copied ? "Código de invitación copiado" : "Copiar código de invitación"}
+                    className="flex min-h-11 items-center gap-1.5 rounded-xl border border-pink-200 bg-pink-50 px-3 text-xs font-black text-pink-700 transition hover:bg-pink-100"
+                  >
+                    <Share2 className="h-3.5 w-3.5" />
+                    {copied ? "¡Copiado!" : "Copiar código"}
+                  </button>
+                )}
+                {goal.isOwner && (
+                  <button
+                    onClick={() => setConfirmCloseGoal(true)}
+                    className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-slate-500 transition hover:bg-rose-50 hover:text-rose-600"
+                    aria-label="Cerrar meta compartida"
+                    title="Cerrar meta"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
               </div>
             </div>
 
@@ -622,7 +710,7 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
                   Aporte de {goal.creator_name || "Vos"}:
                 </span>
                 <span className="text-lg font-black text-slate-900 font-mono">
-                  {currencySymbol} {formatMoney(goal.totalMe)}
+                  {currencySymbol} {formatMoney(goal.totalCreator)}
                 </span>
               </div>
               <div className="min-w-0 rounded-2xl border border-pink-200/80 bg-pink-50/50 p-3 sm:p-4">
@@ -644,8 +732,9 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
                 <PiggyBank className="h-4 w-4 text-pink-600" />
                 Sumar un Aporte al Chanchito Compartido
               </div>
+              <p className="text-[11px] text-slate-600">El aporte se registra a nombre de {goal.myContributorName}; la otra cuenta no puede atribuirlo por vos.</p>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <div>
                   <label htmlFor="couple-contribution-amount" className="sr-only">Monto del aporte en {currencySymbol}</label>
                   <input
@@ -660,19 +749,6 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
                     placeholder="Monto (₲)"
                     className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-mono font-bold text-slate-900 focus:border-pink-500 focus:outline-none"
                   />
-                </div>
-
-                <div>
-                  <label htmlFor="couple-contribution-person" className="sr-only">Quién realiza el aporte</label>
-                  <select
-                    id="couple-contribution-person"
-                    value={contribBy}
-                    onChange={(e) => setContribBy(e.target.value)}
-                    className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-900 focus:border-pink-500 focus:outline-none"
-                  >
-                    <option value={goal.creator_name || "Vos"}>Aporta: {goal.creator_name || "Vos"}</option>
-                    <option value={goal.partner_name}>Aporta: {goal.partner_name}</option>
-                  </select>
                 </div>
 
                 <div>
