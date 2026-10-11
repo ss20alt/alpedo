@@ -1,0 +1,72 @@
+# Dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# Testing
+/coverage
+
+# Next.js build & caches
+/.next/
+/out/
+/build
+
+# Misc
+.DS_Store
+*.pem
+*.key
+*.tar.gz
+*.zip
+*.log
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Environment & credentials
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+!.env.example
+
+# Scratch & experiments
+/scratch/
+
+vps_dump.json
+*.dump
+src_local_backup/
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+
+# Temporary migration & diagnostic scripts
+check_pg_users.js
+check_users.js
+check_vps_users.js
+dump_vps.js
+fix_and_migrate_txs.js
+fix_pins.js
+fix_vps_user.js
+query_vps.js
+restore_local.js
+swap_users.js
+sync_from_vps.js
+test_api_tx.js
+test_pg.js
+sync_code_from_vps.js
+
+# Vercel
+.vercel
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts

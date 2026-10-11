@@ -1,0 +1,17 @@
+services:
+  finanzas-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: finanzas-inteligentes
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - SESSION_SECRET=tu-clave-secreta-personal-cambiar-en-produccion
+      # - APP_PIN=1234 # Opcional: Podés forzar el PIN por variable de entorno aquí si querés
+    volumes:
+      # Montaje del volumen para que tu base de datos SQLite persista en el host
+      - ./data:/app/data

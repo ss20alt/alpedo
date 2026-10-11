@@ -1,0 +1,484 @@
+"use client";
+
+import React, { useState, useEffect } from "react";
+import {
+  Flame,
+  CheckCircle2,
+  Trophy,
+  Share2,
+  PiggyBank,
+  TrendingUp,
+  Sparkles,
+  RotateCcw,
+  Calendar,
+  Check,
+  Copy,
+} from "lucide-react";
+
+interface ChallengeTabProps {
+  currencySymbol: string;
+}
+
+export default function ChallengeTab({ currencySymbol }: ChallengeTabProps) {
+  const [salary, setSalary] = useState<number>(3044000);
+  const [startMonth, setStartMonth] = useState<string>("2026-10");
+  const [completedMonths, setCompletedMonths] = useState<number[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+
+  const monthNames = [
+    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+  ];
+
+  // Load challenge from API
+  useEffect(() => {
+    const fetchChallenge = async () => {
+      try {
+        setLoading(true);
+        const res = await fetch("/api/challenge");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.salary) setSalary(data.salary);
+          if (data.start_month) setStartMonth(data.start_month);
+          if (Array.isArray(data.completed_months)) setCompletedMonths(data.completed_months);
+        }
+      } catch {
+        // ignore
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchChallenge();
+  }, []);
+
+  // Update salary or start month
+  const updateConfig = async (newSalary: number, newStartMonth: string) => {
+    setSalary(newSalary);
+    setStartMonth(newStartMonth);
+    try {
+      await fetch("/api/challenge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update_config",
+          salary: newSalary,
+          start_month: newStartMonth,
+        }),
+      });
+    } catch {
+      // ignore
+    }
+  };
+
+  // Toggle month completion
+  const toggleMonth = async (monthIndex: number) => {
+    const isCompleted = completedMonths.includes(monthIndex);
+    const updated = isCompleted
+      ? completedMonths.filter((m) => m !== monthIndex)
+      : [...completedMonths, monthIndex].sort((a, b) => a - b);
+
+    setCompletedMonths(updated);
+
+    try {
+      await fetch("/api/challenge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "toggle_month",
+          month_index: monthIndex,
+        }),
+      });
+    } catch {
+      // ignore
+    }
+  };
+
+  const formatMoney = (val: number) => {
+    return Math.round(val).toLocaleString("es-PY");
+  };
+
+  // Calculate 12-month sequence details
+  const getChallengeMonths = () => {
+    const [startYearStr, startMonthStr] = startMonth.split("-");
+    const sYear = parseInt(startYearStr) || 2026;
+    const sMonth = (parseInt(startMonthStr) || 10) - 1; // 0-indexed
+
+    const list = [];
+    let runningTotal = 0;
+
+    for (let i = 1; i <= 12; i++) {
+      const date = new Date(sYear, sMonth + (i - 1), 1);
+      const name = `${monthNames[date.getMonth()]} ${date.getFullYear()}`;
+      const percentage = i;
+      const amount = Math.round((salary * percentage) / 100);
+      runningTotal += amount;
+
+      list.push({
+        index: i,
+        monthName: name,
+        percentage,
+        amount,
+        runningTotal,
+        isCompleted: completedMonths.includes(i),
+      });
+    }
+    return list;
+  };
+
+  const challengeMonths = getChallengeMonths();
+
+  // Total saved so far
+  const totalSavedSoFar = challengeMonths
+    .filter((m) => m.isCompleted)
+    .reduce((acc, m) => acc + m.amount, 0);
+
+  // Total potential at end of 12 months
+  const totalPotentialSaved = challengeMonths[11]?.runningTotal || 0;
+  const progressPercent = Math.round((completedMonths.length / 12) * 100);
+
+  // Share text generator for WhatsApp/Group
+  const copyShareText = (monthIndex: number, monthName: string, amount: number, percent: number) => {
+    const text = `🔥 ¡HECHO! Separé mi ${percent}% de ${monthName} (${currencySymbol} ${formatMoney(amount)}) para el Reto del 1%.\n¡El juego es la constancia! Mes ${monthIndex} cumplido 💪`;
+    navigator.clipboard.writeText(text);
+    setCopiedIndex(monthIndex);
+    setTimeout(() => setCopiedIndex(null), 2500);
+  };
+
+  if (loading) {
+    return (
+      <div className="flex h-64 items-center justify-center text-slate-500">
+        <div className="h-7 w-7 animate-spin rounded-full border-2 border-orange-500 border-t-transparent" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4 sm:space-y-6">
+      {/* 1. Hero Banner */}
+      <div id="tour-challenge-card" className="relative overflow-hidden rounded-[28px] border border-orange-200/80 bg-gradient-to-br from-orange-50/70 via-white to-amber-50/80 p-5 sm:p-7 shadow-[0_4px_24px_rgba(249,115,22,0.06)] text-slate-900">
+        <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-5">
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-orange-100 border border-orange-200 px-3 py-1 text-xs font-black text-orange-700 uppercase tracking-widest shadow-sm">
+              <Flame className="h-4 w-4 text-orange-500 shrink-0 animate-pulse" />
+              <span>DESAFÍO EXCLUSIVO</span>
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+              🔥 ARRANCA EL RETO DEL 1% 🔥
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-600 max-w-2xl leading-relaxed font-medium">
+              La regla es una sola: <strong>cada vez que cobres</strong>, antes de gastar en cualquier cosa, separás tu porcentaje correspondiente.
+              ¿Es poco al principio? Sí. Y ese es el punto: <span className="text-orange-600 font-bold">el juego es la constancia, no el monto.</span>
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-orange-200 bg-white p-4 shrink-0 text-center sm:text-right shadow-sm">
+            <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+              Total al Completar (12 Meses)
+            </div>
+            <div className="text-2xl sm:text-3xl font-black font-mono text-emerald-600 mt-0.5">
+              {currencySymbol} {formatMoney(totalPotentialSaved)}
+            </div>
+            <div className="text-[10px] text-slate-500 font-medium mt-1">
+              🎉 ¡78% de un sueldo completo ahorrado!
+            </div>
+          </div>
+        </div>
+
+        {/* Regla de Oro Callout */}
+        <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50/70 p-3.5 sm:p-4 text-xs text-amber-950 flex items-start gap-3">
+          <span className="text-base shrink-0">💡</span>
+          <div className="leading-relaxed font-medium">
+            <strong className="text-amber-900 font-bold">Regla de oro:</strong> Separalo en una cuenta aparte, un sobre o una billetera digital (Ueno, Vaquita, Mango, etc.). 
+            <span className="text-orange-700 font-bold"> Que no se mezcle con la plata del día a día.</span>
+          </div>
+        </div>
+
+        {/* 3-Step Interactive Methodology */}
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          <div className="rounded-xl bg-white/75 border border-orange-100 p-2.5">
+            <div className="text-[11px] font-black text-orange-700">Paso 1: Inicio Sin Fricción</div>
+            <div className="text-[10px] text-slate-500 mt-0.5">El mes 1 solo apartás 1% (ej: ₲ 30.000). Ni lo sentís en el bolsillo.</div>
+          </div>
+          <div className="rounded-xl bg-white/75 border border-orange-100 p-2.5">
+            <div className="text-[11px] font-black text-orange-700">Paso 2: Hábito Imparable</div>
+            <div className="text-[10px] text-slate-500 mt-0.5">Cada mes sube +1%. Tu mente se acostumbra a vivir con 95% y ahorrar el resto.</div>
+          </div>
+          <div className="rounded-xl bg-white/75 border border-orange-100 p-2.5">
+            <div className="text-[11px] font-black text-orange-700">Paso 3: Victoria al Mes 12</div>
+            <div className="text-[10px] text-slate-500 mt-0.5">Completás los 12 meses acumulando casi un sueldo entero como colchón de paz mental.</div>
+          </div>
+        </div>
+      </div>
+
+      {/* 2. Configurador de Salario & Mes de Inicio */}
+      <div className="rounded-[28px] border border-slate-100 bg-white p-4 sm:p-6 shadow-[0_4px_24px_rgba(0,0,0,0.03)] text-slate-900">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+          <div>
+            <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+              <PiggyBank className="h-5 w-5 text-emerald-600 shrink-0" />
+              <span>Configurá tu Salario para el Reto</span>
+            </h3>
+            <p className="text-xs text-slate-500 font-medium mt-0.5">
+              Los porcentajes se calculan automáticamente sobre lo que cobrás.
+            </p>
+          </div>
+
+          {/* Month selector */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-500 font-bold">Mes de inicio:</span>
+            <input
+              type="month"
+              value={startMonth}
+              onChange={(e) => updateConfig(salary, e.target.value)}
+              className="h-10 rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs text-slate-900 font-semibold focus:bg-white focus:border-blue-500 focus:outline-none transition"
+            />
+          </div>
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+          <div>
+            <label className="block text-[11px] font-black uppercase tracking-wider text-slate-400 mb-1.5">
+              Tu Salario Mensual ({currencySymbol})
+            </label>
+            <div className="relative">
+              <span className="absolute left-3.5 top-3 text-base font-bold text-slate-400">
+                {currencySymbol}
+              </span>
+              <input
+                type="number"
+                min="0"
+                step="any"
+                inputMode="numeric"
+                value={salary || ""}
+                onChange={(e) => updateConfig(Math.max(0, parseFloat(e.target.value) || 0), startMonth)}
+                className="w-full h-12 rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 text-lg font-black text-slate-900 font-mono focus:bg-white focus:border-blue-500 focus:outline-none transition"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-black uppercase tracking-wider text-slate-400 mb-1.5">
+              Valores Rápidos en Paraguay
+            </label>
+            <div className="flex flex-wrap gap-1.5">
+              {[
+                { label: "Mínimo (₲ 3.044.000)", val: 3044000 },
+                { label: "₲ 4M", val: 4000000 },
+                { label: "₲ 5M", val: 5000000 },
+                { label: "₲ 7.5M", val: 7500000 },
+                { label: "₲ 10M", val: 10000000 },
+              ].map((item) => (
+                <button
+                  key={item.val}
+                  type="button"
+                  onClick={() => updateConfig(item.val, startMonth)}
+                  className={`rounded-xl px-2.5 py-2 text-xs font-mono font-bold transition active:scale-95 ${
+                    salary === item.val
+                      ? "bg-slate-900 text-white font-black shadow-sm"
+                      : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 3. Panel de Progreso del Reto */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+        {/* Guardado hasta hoy */}
+        <div className="rounded-[24px] border border-emerald-200/80 bg-emerald-50/60 p-4 sm:p-5 shadow-sm flex flex-col justify-between text-slate-900">
+          <div>
+            <span className="text-[11px] font-black uppercase tracking-wider text-emerald-700">
+              Ahorrado Hasta Hoy
+            </span>
+            <div className="mt-1 text-2xl font-black text-emerald-700 font-mono">
+              {currencySymbol} {formatMoney(totalSavedSoFar)}
+            </div>
+          </div>
+          <div className="mt-3 text-[11px] text-slate-500 font-medium">
+            {completedMonths.length === 0
+              ? "Separás tu primer 1% este mes para arrancar."
+              : `¡Excelente! Cumpliste ${completedMonths.length} de 12 meses.`}
+          </div>
+        </div>
+
+        {/* Porcentaje Cumplido */}
+        <div className="rounded-[24px] border border-slate-100 bg-white p-4 sm:p-5 shadow-sm flex flex-col justify-between text-slate-900">
+          <div>
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">
+                Progreso del Reto
+              </span>
+              <span className="text-xs font-black text-orange-600 font-mono">
+                {progressPercent}%
+              </span>
+            </div>
+            <div className="mt-2 text-2xl font-black text-slate-900 font-mono">
+              {completedMonths.length} / 12 <span className="text-xs text-slate-400 font-medium">meses</span>
+            </div>
+          </div>
+
+          <div className="mt-3">
+            <div className="h-2 w-full rounded-full bg-slate-100 overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-orange-500 to-emerald-500 transition-all duration-500"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Meta Acumulada Anual */}
+        <div className="rounded-[24px] border border-slate-100 bg-white p-4 sm:p-5 shadow-sm flex flex-col justify-between text-slate-900">
+          <div>
+            <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">
+              Meta al Mes 12
+            </span>
+            <div className="mt-1 text-2xl font-black text-slate-900 font-mono">
+              {currencySymbol} {formatMoney(totalPotentialSaved)}
+            </div>
+          </div>
+          <div className="mt-3 text-[11px] text-slate-500 font-medium">
+            Falta guardar: <strong className="text-slate-800 font-mono font-bold">{currencySymbol} {formatMoney(Math.max(0, totalPotentialSaved - totalSavedSoFar))}</strong>
+          </div>
+        </div>
+      </div>
+
+      {/* 4. Roadmap de los 12 Meses */}
+      <div className="rounded-[28px] border border-slate-100 bg-white p-4 sm:p-6 shadow-[0_4px_24px_rgba(0,0,0,0.03)] text-slate-900">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-4 mb-4">
+          <div>
+            <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-orange-500 shrink-0" />
+              <span>El Plan Mes a Mes (1% al 12%)</span>
+            </h3>
+            <p className="text-xs text-slate-500 font-medium mt-0.5">
+              Marcá cada mes apenas separes tu porcentaje al cobrar.
+            </p>
+          </div>
+
+          <div className="text-[11px] text-slate-500 font-medium">
+            Total acumulado al completar: <strong className="text-emerald-600 font-mono font-black">{currencySymbol} {formatMoney(totalPotentialSaved)}</strong>
+          </div>
+        </div>
+
+        {/* 12 Months Cards Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+          {challengeMonths.map((m) => (
+            <div
+              key={m.index}
+              className={`rounded-2xl border p-4 flex flex-col justify-between transition-all ${
+                m.isCompleted
+                  ? "border-emerald-200 bg-emerald-50/40 shadow-sm"
+                  : "border-slate-100 bg-slate-50/50 hover:border-slate-200 shadow-sm"
+              }`}
+            >
+              <div>
+                {/* Header card */}
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs font-black font-mono ${
+                        m.isCompleted
+                          ? "bg-emerald-600 text-white shadow-sm"
+                          : "bg-slate-200 text-slate-700"
+                      }`}
+                    >
+                      M{m.index}
+                    </span>
+                    <div>
+                      <div className="text-xs font-extrabold text-slate-900">{m.monthName}</div>
+                      <div className="text-[10px] text-slate-400 font-medium">Mes {m.index} del reto</div>
+                    </div>
+                  </div>
+
+                  {/* Percentage Badge */}
+                  <span
+                    className={`rounded-full px-2.5 py-0.5 text-xs font-black font-mono border ${
+                      m.isCompleted
+                        ? "bg-emerald-100 text-emerald-800 border-emerald-200"
+                        : "bg-orange-100 text-orange-700 border-orange-200"
+                    }`}
+                  >
+                    {m.percentage}%
+                  </span>
+                </div>
+
+                {/* Amount to separate */}
+                <div className={`mt-3 rounded-xl p-3 border ${
+                  m.isCompleted ? "bg-white border-emerald-100" : "bg-white border-slate-100"
+                }`}>
+                  <div className="text-[10px] uppercase font-black tracking-wider text-slate-400">
+                    A separar este mes:
+                  </div>
+                  <div
+                    className={`text-xl font-black font-mono mt-0.5 ${
+                      m.isCompleted ? "text-emerald-600" : "text-slate-900"
+                    }`}
+                  >
+                    {currencySymbol} {formatMoney(m.amount)}
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-1 flex justify-between font-medium">
+                    <span>Acumulado hasta aquí:</span>
+                    <span className="font-mono text-slate-600 font-bold">
+                      {currencySymbol} {formatMoney(m.runningTotal)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => toggleMonth(m.index)}
+                  className={`flex-1 h-11 flex items-center justify-center gap-2 rounded-xl text-xs font-black transition active:scale-95 ${
+                    m.isCompleted
+                      ? "bg-emerald-600 text-white shadow-md shadow-emerald-500/20"
+                      : "bg-slate-900 hover:bg-slate-800 text-white"
+                  }`}
+                >
+                  {m.isCompleted ? (
+                    <>
+                      <Check className="h-4 w-4 stroke-[3]" />
+                      <span>¡HECHO! 🎉</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                      <span>Marcar HECHO 💪</span>
+                    </>
+                  )}
+                </button>
+
+                {/* Share Button for Group */}
+                <button
+                  type="button"
+                  onClick={() => copyShareText(m.index, m.monthName, m.amount, m.percentage)}
+                  className="h-11 w-11 flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition active:scale-95 shrink-0"
+                  title="Copiar compromiso para el grupo"
+                >
+                  {copiedIndex === m.index ? (
+                    <Check className="h-4 w-4 text-emerald-600" />
+                  ) : (
+                    <Share2 className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
+
+              {copiedIndex === m.index && (
+                <div className="text-[10px] text-center text-emerald-600 font-bold mt-1">
+                  ¡Copiado para el grupo! Pegalo en WhatsApp.
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
