@@ -158,7 +158,7 @@ export const TOUR_STEPS: TourStep[] = [
     icon: <MessageCircle className="h-4 w-4 text-[#1656DB]" />,
     headline: "Consultale al Kape antes de gastar",
     description:
-      "Tocá la burbuja de chat de arriba para ver cómo una compra impactaría en tu presupuesto.",
+      "El botón de chat abre al Kape para consultar cómo una compra impactaría en tu presupuesto.",
     tip: "Podés consultar antes de decidir.",
     targetTab: "dashboard",
     targetSelector: "#tour-cuero-header-button",
@@ -173,8 +173,8 @@ export const TOUR_STEPS: TourStep[] = [
     icon: <Flame className="h-4 w-4 text-orange-500" />,
     headline: "Deslizá para categorizar al instante",
     description:
-      "Deslizá a la derecha para editar; a la izquierda para marcar 'Al Pedo' o borrar.",
-    tip: "Gestos swipe rápidos con respuesta háptica.",
+      "Tocá Opciones en un movimiento para editar, marcar 'Al Pedo' o borrar. También podés deslizarlo hacia los lados.",
+    tip: "Usá el botón o el gesto que te resulte más cómodo.",
     targetTab: "transactions",
     targetSelector: "#tour-transactions-list",
     spotlightPadding: 8,
@@ -257,7 +257,7 @@ export const TOUR_STEPS: TourStep[] = [
     icon: <Eye className="h-4 w-4 text-[#1656DB]" />,
     headline: "Ocultá tus números en 1 toque",
     description:
-      "Tocá el ojo de arriba para ocultar tus saldos. Volvé a tocarlo para mostrarlos.",
+      "El botón del ojo oculta tus saldos; volvé a usarlo cuando quieras mostrarlos.",
     tip: "Práctico cuando mirás la app en público.",
     targetTab: "dashboard",
     targetSelector: "#tour-privacy-btn",
@@ -411,7 +411,19 @@ export default function InteractiveTour({
       isCircular: step.isCircular,
     };
 
-    setTargetBox(box);
+    setTargetBox((previous) => {
+      if (
+        previous &&
+        Math.abs(previous.top - box.top) < 0.5 &&
+        Math.abs(previous.left - box.left) < 0.5 &&
+        Math.abs(previous.width - box.width) < 0.5 &&
+        Math.abs(previous.height - box.height) < 0.5 &&
+        previous.isCircular === box.isCircular
+      ) {
+        return previous;
+      }
+      return box;
+    });
     return true;
   }, [isOpen, currentStepIndex, getHeaderBottom]);
 
@@ -455,7 +467,8 @@ export default function InteractiveTour({
 
         if (isHeaderTarget) {
           // If in header, scroll to top 0
-          window.scrollTo({ top: 0, behavior: "smooth" });
+          const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+          window.scrollTo({ top: 0, behavior: reducedMotion ? "instant" : "smooth" });
         } else if (!isFixedTarget) {
           // Automatic adaptive scrolling:
           // Place the top of the element exactly 14px below the bottom edge of the sticky header
@@ -464,26 +477,35 @@ export default function InteractiveTour({
           const currentRect = el.getBoundingClientRect();
           const elementAbsoluteY = window.scrollY + currentRect.top;
           const targetScrollY = Math.max(0, elementAbsoluteY - desiredViewportTop);
+          const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
           window.scrollTo({
             top: targetScrollY,
-            behavior: "smooth",
+            behavior: reducedMotion ? "instant" : "smooth",
           });
         }
 
-        // Continuous layout tracking during smooth scroll animation
+        // Keep the spotlight attached to its target until smooth scrolling settles.
+        setIsTransitioning(false);
         const startTime = performance.now();
+        let previousScrollY = window.scrollY;
+        let stableFrames = 0;
         const trackLoop = () => {
           if (canceled) return;
           measureTarget();
-          if (performance.now() - startTime < 550) {
+          const currentScrollY = window.scrollY;
+          stableFrames = Math.abs(currentScrollY - previousScrollY) < 0.5 ? stableFrames + 1 : 0;
+          previousScrollY = currentScrollY;
+          const elapsed = performance.now() - startTime;
+          if (elapsed < 1500 && (elapsed < 180 || stableFrames < 3)) {
             animFrameRef.current = requestAnimationFrame(trackLoop);
           } else {
+            measureTarget();
             setIsTransitioning(false);
           }
         };
         trackLoop();
-      } else if (attempts < 15) {
+      } else if (attempts < 30) {
         attempts++;
         setTimeout(runLocate, 70);
       } else {
@@ -589,7 +611,7 @@ export default function InteractiveTour({
   const winH = typeof window !== "undefined" ? window.innerHeight : 800;
   const headerBottom = getHeaderBottom();
 
-  // If target is in lower half (e.g. floating mate button), card docks at top; otherwise card docks at bottom
+  // Keep the guide card anchored on mobile; desktop can use the more spacious side of the target.
   const isTargetInUpperHalf = targetBox ? targetBox.top < winH * 0.48 : false;
   const radius = targetBox?.isCircular ? Math.max(targetBox.width, targetBox.height) / 2 : 24;
 
@@ -611,7 +633,7 @@ export default function InteractiveTour({
     >
       {/* 1. Dynamic SVG Cutout Mask (Spotlight on Target Element) */}
       <svg
-        className={`fixed inset-0 w-full h-full pointer-events-none z-40 transition-opacity duration-300 ease-out ${
+        className={`fixed inset-0 w-full h-full pointer-events-none z-40 transition-opacity duration-200 ease-out ${
           isTransitioning ? "opacity-30" : "opacity-100"
         }`}
         xmlns="http://www.w3.org/2000/svg"
@@ -630,7 +652,6 @@ export default function InteractiveTour({
                 rx={radius}
                 ry={radius}
                 fill="black"
-                className="transition-all duration-300 ease-out"
               />
             )}
           </mask>
@@ -642,7 +663,6 @@ export default function InteractiveTour({
           height="100%"
           fill="rgba(2, 6, 23, 0.72)"
           mask="url(#alpedo-spotlight-mask)"
-          className="transition-all duration-300 ease-out"
         />
       </svg>
 
@@ -659,7 +679,7 @@ export default function InteractiveTour({
             height: `${targetBox.height}px`,
             borderRadius: `${radius}px`,
           }}
-          className="fixed pointer-events-none z-45 ring-4 ring-[#1656DB] shadow-[0_0_35px_rgba(22,86,219,0.55)] transition-all duration-300 ease-out"
+          className="fixed pointer-events-none z-45 ring-4 ring-[#1656DB] shadow-[0_0_35px_rgba(22,86,219,0.55)] transition-[box-shadow,opacity] duration-200 ease-out"
         >
           {/* Animated Attention Badge with screen safe-clamping */}
           <div
@@ -669,7 +689,7 @@ export default function InteractiveTour({
                 : "-top-3.5"
             } ${isNearRight ? "right-1" : "left-2"}`}
           >
-            <><ArrowDown className="h-3 w-3" /> {currentStep.isCircular ? "Tocá aquí" : "Ver sección"}</>
+            <><ArrowDown className="h-3 w-3" /> {currentStep.isCircular ? "Control señalado" : "Ver sección"}</>
           </div>
         </div>
       )}
@@ -682,16 +702,17 @@ export default function InteractiveTour({
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
-        className={`fixed inset-x-3 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 z-50 max-w-[400px] w-auto sm:w-full transition-all duration-300 ease-out ${
+        className={`fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+12px)] sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 z-50 max-w-[400px] w-auto sm:w-full transition-transform duration-200 ease-out ${
           targetBox
             ? isTargetInUpperHalf
-              ? "bottom-[calc(env(safe-area-inset-bottom)+12px)] sm:bottom-4"
-              : "top-14 sm:top-16"
-            : "bottom-3 sm:top-1/2 sm:-translate-y-1/2"
+              ? "sm:top-auto sm:bottom-4"
+              : "sm:top-14 sm:bottom-auto"
+            : "sm:top-1/2 sm:bottom-auto sm:-translate-y-1/2"
         }`}
       >
         <div className="relative overflow-hidden rounded-2xl border border-slate-200/95 bg-white/96 backdrop-blur-xl px-3 py-2.5 sm:px-3.5 sm:py-3 shadow-[0_12px_36px_rgba(0,0,0,0.22)] text-slate-900">
-          
+          <div aria-hidden="true" className="mx-auto mb-1.5 h-1 w-9 rounded-full bg-slate-200 sm:hidden" />
+
           {/* Top Hairline Progress Bar */}
           <div className="absolute top-0 inset-x-0 h-1 bg-slate-100 overflow-hidden">
             <div
@@ -701,7 +722,7 @@ export default function InteractiveTour({
           </div>
 
           {/* Top Row: Section Badge + Step Counter + Close button */}
-          <div className="flex items-center justify-between pt-0.5 pb-0.5">
+          <div key={`${currentStep.id}-header`} className="flex items-center justify-between pt-0.5 pb-0.5 animate-in fade-in duration-150">
             <div className="flex items-center gap-1.5 min-w-0">
               <span
                 className={`rounded-full border px-2 py-1 text-[10px] font-black uppercase tracking-wider flex items-center gap-1 truncate ${currentStep.badgeColor}`}
@@ -726,7 +747,7 @@ export default function InteractiveTour({
           </div>
 
           {/* Middle Row: Title + Inline Concise Description */}
-          <div className="my-1">
+          <div key={`${currentStep.id}-copy`} className="my-1 animate-in fade-in slide-in-from-bottom-1 duration-200">
             <h3 className="text-sm font-black text-slate-900 tracking-tight flex items-center gap-1.5 leading-snug">
               <span className="shrink-0">{currentStep.icon}</span>
               <span className="truncate">{currentStep.title}</span>

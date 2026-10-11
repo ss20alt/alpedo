@@ -243,15 +243,15 @@ export default function ChallengeTab({ currencySymbol }: ChallengeTabProps) {
         <div className="mt-4 hidden grid-cols-1 gap-2.5 sm:grid sm:grid-cols-3">
           <div className="rounded-xl bg-white/75 border border-orange-100 p-2.5">
             <div className="text-[11px] font-black text-orange-700">Paso 1: Inicio Sin Fricción</div>
-            <div className="text-[10px] text-slate-500 mt-0.5">El primer mes apartás 1% (ej.: {currencySymbol} {formatMoney(Math.round(previewSalary / 100))}). Empezá con un monto llevadero.</div>
+            <div className="mt-1 text-xs leading-relaxed text-slate-600">El primer mes apartás 1% (ej.: {currencySymbol} {formatMoney(Math.round(previewSalary / 100))}). Empezá con un monto llevadero.</div>
           </div>
           <div className="rounded-xl border border-orange-100 bg-white/75 p-2.5">
             <div className="text-[11px] font-black text-orange-700">Paso 2: Hábito Imparable</div>
-            <div className="mt-0.5 text-[10px] text-slate-500">Cada mes subís un punto porcentual, de forma gradual y sostenida.</div>
+            <div className="mt-1 text-xs leading-relaxed text-slate-600">Cada mes subís un punto porcentual, de forma gradual y sostenida.</div>
           </div>
           <div className="rounded-xl bg-white/75 border border-orange-100 p-2.5">
             <div className="text-[11px] font-black text-orange-700">Paso 3: Victoria al Mes 12</div>
-            <div className="text-[10px] text-slate-500 mt-0.5">Completás los 12 meses acumulando casi un sueldo entero como colchón de paz mental.</div>
+            <div className="mt-1 text-xs leading-relaxed text-slate-600">Completás los 12 meses acumulando casi un sueldo entero como colchón de paz mental.</div>
           </div>
         </div>
       </div>

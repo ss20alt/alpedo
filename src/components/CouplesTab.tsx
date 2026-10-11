@@ -716,7 +716,7 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
                         <span className="font-mono font-black text-pink-600">
                           +{currencySymbol} {formatMoney(c.amount)}
                         </span>
-                        <span className="text-[10px] text-slate-500 font-medium">{formatParaguayDateLabel(String(c.date).slice(0, 10))}</span>
+                        <span className="text-[11px] text-slate-600 font-medium">{formatParaguayDateLabel(String(c.date).slice(0, 10))}</span>
                       </div>
                     </div>
                   ))}

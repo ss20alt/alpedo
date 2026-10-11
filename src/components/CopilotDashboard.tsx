@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import {
   FinancialMetrics,
   Transaction,
@@ -8,24 +8,14 @@ import {
 import {
   HelpCircle,
   ChevronRight,
-  Plus,
-  ArrowUpRight,
-  Calendar,
   BookOpen,
   CreditCard,
   Flame,
-  CheckCircle2,
   TrendingUp,
   TrendingDown,
-  Info,
-  Clock,
   ArrowRight,
-  ShieldCheck,
   Check,
   X,
-  Building2,
-  Wallet,
-  Coins,
   Zap,
   Share2,
   Gauge,
@@ -43,6 +33,12 @@ export interface MonthlyHistoryItem {
   total_income: number;
   al_pedo_expenses: number;
 }
+
+const monthLabels = ["E", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
+const monthFullNames = [
+  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+];
 
 interface CopilotDashboardProps {
   userId: number;
@@ -81,7 +77,6 @@ export default function CopilotDashboard({
   selectedMonth,
   budgetAlPedoLimit,
   budgetVariableLimit,
-  emergencyFundSaved,
   accountBank = "",
   accountType = "",
   accountLast4 = "",
@@ -103,7 +98,6 @@ export default function CopilotDashboard({
   const [timeframe, setTimeframe] = useState<"1W" | "1M" | "3M" | "YTD" | "1Y">("1M");
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [showAccountModal, setShowAccountModal] = useState(false);
-  const [activeTooltipDay, setActiveTooltipDay] = useState<number | null>(null);
   const [copiedShare, setCopiedShare] = useState(false);
 
   // Edit Account Form State
@@ -142,10 +136,10 @@ export default function CopilotDashboard({
     onAddNew();
   };
 
-  const formatMoney = (val: number) => {
+  const formatMoney = useCallback((val: number) => {
     if (privacyMode) return "••••••";
     return Math.round(val).toLocaleString("es-PY");
-  };
+  }, [privacyMode]);
 
 
   // Calculations for Copilot hero card
@@ -162,12 +156,13 @@ export default function CopilotDashboard({
   }, [transactions]);
 
   // Dynamic Day-by-Day Spending Curve
-  const { pathD, areaD, currentPoint, daysInMonth, dailyTotals, lastActiveDay } = useMemo(() => {
+  const { pathD, areaD, currentPoint, daysInMonth, dailyPoints, lastActiveDay, isCurrentMonth } = useMemo(() => {
     // Determine days in current selected month
     const parts = selectedMonth.split("-");
     const year = parseInt(parts[0], 10) || paraguayYear;
     const monthIndex = (parseInt(parts[1], 10) || paraguayMonth) - 1;
     const numDays = new Date(year, monthIndex + 1, 0).getDate();
+    const chartMonthKey = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
 
     // Map daily expenses
     const dayExpenses: Record<number, number> = {};
@@ -175,6 +170,8 @@ export default function CopilotDashboard({
 
     transactions.forEach((tx) => {
       if (tx.type === "expense" && tx.date) {
+        const txMonth = tx.date.slice(0, 7);
+        if (txMonth !== chartMonthKey) return;
         const txDay = parseInt(tx.date.split("-")[2], 10);
         if (txDay >= 1 && txDay <= numDays) {
           dayExpenses[txDay] = (dayExpenses[txDay] || 0) + tx.amount;
@@ -194,21 +191,24 @@ export default function CopilotDashboard({
 
     // Build SVG coordinates
     // SVG viewBox: 0 0 400 130. usable X: 25 to 375, usable Y: 25 to 110
-    const points: Array<{ x: number; y: number; day: number; cumulative: number }> = [];
+    const points: Array<{ x: number; y: number; day: number; cumulative: number; dailyTotal: number }> = [];
+    const allPoints: Array<{ x: number; y: number; day: number; cumulative: number; dailyTotal: number }> = [];
     let cum = 0;
 
-    for (let d = 1; d <= activeDay; d++) {
+    for (let d = 1; d <= numDays; d++) {
       cum += dayExpenses[d] || 0;
       const x = 25 + ((d - 1) / Math.max(1, numDays - 1)) * 350;
       // Y: when cum = 0, y = 105. When cum = totalBudgeted, y = 40.
       const ratio = totalBudgeted > 0 ? cum / totalBudgeted : 0;
       // Invert so higher spending moves the line upward
       const y = Math.max(30, Math.min(115, 108 - ratio * 72));
-      points.push({ x, y, day: d, cumulative: cum });
+      const point = { x, y, day: d, cumulative: cum, dailyTotal: dayExpenses[d] || 0 };
+      allPoints.push(point);
+      if (d <= activeDay) points.push(point);
     }
 
     if (points.length === 0) {
-      points.push({ x: 25, y: 108, day: 1, cumulative: 0 });
+      points.push({ x: 25, y: 108, day: 1, cumulative: 0, dailyTotal: 0 });
     }
 
     // Build smooth cubic bezier SVG path
@@ -228,10 +228,36 @@ export default function CopilotDashboard({
       areaD: aD,
       currentPoint: last,
       daysInMonth: numDays,
-      dailyTotals: dayExpenses,
+      dailyPoints: allPoints,
       lastActiveDay: activeDay,
+      isCurrentMonth,
     };
   }, [transactions, selectedMonth, totalBudgeted, paraguayYear, paraguayMonth, paraguayDay]);
+
+  const [selectedChartDay, setSelectedChartDay] = useState<number | null>(null);
+  const selectedPoint = selectedChartDay === null
+    ? null
+    : dailyPoints.find((point) => point.day === selectedChartDay) ?? null;
+  const chartPoint = selectedPoint ?? currentPoint;
+  const selectedDayIsFuture = Boolean(selectedPoint && isCurrentMonth && selectedPoint.day > lastActiveDay);
+  const monthShortNames = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+  const selectedMonthIndex = selectedMonth === "all" ? paraguayMonth - 1 : Number(selectedMonth.split("-")[1]) - 1;
+  const selectedDateLabel = `${chartPoint.day} ${monthShortNames[Math.max(0, Math.min(11, selectedMonthIndex))]}`;
+  const chartDateTicks = Array.from(new Set([
+    1,
+    Math.round((daysInMonth - 1) * 0.25) + 1,
+    Math.round((daysInMonth - 1) * 0.5) + 1,
+    Math.round((daysInMonth - 1) * 0.75) + 1,
+    daysInMonth,
+  ]));
+
+  const selectChartDayAt = (clientX: number, rect: DOMRect) => {
+    if (!rect.width || daysInMonth <= 0) return;
+    const relativeX = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    const dataX = 25 + relativeX * 350;
+    const day = Math.max(1, Math.min(daysInMonth, Math.round(((dataX - 25) / 350) * (daysInMonth - 1) + 1)));
+    setSelectedChartDay(day);
+  };
 
   // 12-Month Bar Chart Data (Image 2 style)
   const currentYear = useMemo(() => {
@@ -240,20 +266,11 @@ export default function CopilotDashboard({
       : String(paraguayYear);
   }, [selectedMonth, paraguayYear]);
 
-  const monthLabels = ["E", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
-  const monthFullNames = [
-    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
-  ];
-
   const { monthsData, totalSpentThisYear, avgMonthlySpent, maxMonthVal } = useMemo(() => {
     const historyMap = new Map<string, MonthlyHistoryItem>();
     monthlyHistory.forEach((h) => {
       historyMap.set(h.month, h);
     });
-
-    let totalYear = 0;
-    let monthsWithData = 0;
 
     const data = monthLabels.map((lbl, idx) => {
       const monthKey = `${currentYear}-${String(idx + 1).padStart(2, "0")}`;
@@ -266,11 +283,6 @@ export default function CopilotDashboard({
       if (selectedMonth === monthKey && metrics.totalExpenses > 0) {
         val = metrics.totalExpenses;
         alPedo = metrics.expenses.al_pedo;
-      }
-
-      if (val > 0) {
-        totalYear += val;
-        monthsWithData++;
       }
 
       const isActive = selectedMonth === monthKey;
@@ -288,6 +300,8 @@ export default function CopilotDashboard({
       };
     });
 
+    const monthsWithData = data.filter((month) => month.val > 0).length;
+    const totalYear = data.reduce((total, month) => total + month.val, 0);
     const maxVal = Math.max(...data.map((m) => m.val), totalBudgeted, 1000000);
     const avg = monthsWithData > 0 ? Math.round(totalYear / monthsWithData) : 0;
 
@@ -496,7 +510,7 @@ export default function CopilotDashboard({
       status,
       message,
     };
-  }, [selectedMonth, metrics, totalBudgeted, currencySymbol, privacyMode, paraguayYear, paraguayMonth, paraguayDay]);
+  }, [selectedMonth, metrics, totalBudgeted, currencySymbol, paraguayYear, paraguayMonth, paraguayDay, formatMoney]);
 
   const handleShareScorecard = async () => {
     triggerHaptic("medium");
@@ -536,9 +550,9 @@ export default function CopilotDashboard({
         {/* Top Info Header */}
         <div className="flex items-start justify-between">
           <div className="w-full text-center">
-            <h2 className="text-[clamp(1.45rem,7.7vw,1.875rem)] sm:text-4xl font-extrabold text-slate-900 tracking-tight flex items-baseline justify-center gap-1 sm:gap-2">
-              <span>{currencySymbol} {formatMoney(leftToSpend)}</span>
-              <span className="text-lg sm:text-2xl font-bold text-slate-600">balance del mes</span>
+            <h2 className="flex min-w-0 flex-col items-center justify-center gap-0.5 pr-4 pl-4 text-slate-900 sm:flex-row sm:items-baseline sm:gap-2">
+              <span className="max-w-full break-all text-[clamp(1.45rem,7.7vw,1.875rem)] font-extrabold tracking-tight sm:text-4xl">{currencySymbol} {formatMoney(leftToSpend)}</span>
+              <span className="text-sm font-bold text-slate-600 sm:text-2xl">balance del mes</span>
             </h2>
             <p className="text-xs sm:text-sm font-semibold text-slate-400 mt-1">
               Ingresos registrados: {currencySymbol} {formatMoney(totalBudgeted)}
@@ -546,59 +560,76 @@ export default function CopilotDashboard({
           </div>
           <button
             onClick={() => setShowInfoModal(true)}
-            className="absolute right-4 top-4 p-1.5 rounded-full text-slate-300 hover:text-slate-600 hover:bg-slate-50 transition active:scale-95"
-            aria-label="Info"
+            className="absolute right-2 top-2 flex h-11 w-11 items-center justify-center rounded-full text-slate-500 hover:text-slate-700 hover:bg-slate-50 transition active:scale-95"
+            aria-label="Cómo se calcula el balance del mes"
           >
             <HelpCircle className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="mt-3 flex items-center justify-center gap-4 text-[10px] font-semibold text-slate-500" aria-label="Leyenda del gráfico">
+        <div className="mt-3 flex items-center justify-center gap-4 text-[11px] font-semibold text-slate-600" aria-label="Leyenda del gráfico">
           <span className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="h-0.5 w-3 rounded-full bg-emerald-500" />Gasto real</span>
           <span className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="w-3 border-t border-dashed border-slate-400" />Ritmo ideal</span>
         </div>
 
         {/* Gasto acumulado frente al ritmo ideal */}
-        <div className="relative mt-1 h-28 w-full sm:h-36">
-          {/* Badge Tooltip pinned dynamically to the active point on the trajectory curve */}
+        <div className="relative mt-1 h-32 w-full sm:h-40">
+          {/* Daily spend tooltip; the monthly cumulative remains the default view. */}
           <div
-            className="absolute z-10 flex flex-col items-center pointer-events-none transition-all duration-300"
+            className="absolute z-10 flex max-w-[calc(100%-12px)] flex-col items-center pointer-events-none transition-[left,top] duration-150"
             style={{
-              left: `${(currentPoint.x / 400) * 100}%`,
-              top: `${(currentPoint.y / 130) * 100}%`,
-              transform: "translate(-50%, -100%)",
-              marginBottom: "8px",
+              left: selectedPoint ? "50%" : `${(currentPoint.x / 400) * 100}%`,
+              top: selectedPoint ? "0%" : `${(currentPoint.y / 150) * 100}%`,
+              transform: selectedPoint ? "translate(-50%, 0)" : "translate(-50%, -100%)",
             }}
           >
-            <div
-              className={`px-3 py-1 rounded-full text-[11px] font-extrabold shadow-md flex items-center gap-1 whitespace-nowrap ${
-                isUnderBudget
-                  ? "bg-emerald-500 text-white shadow-emerald-500/25"
-                  : "bg-red-500 text-white shadow-red-500/25"
-              }`}
-            >
-              <span>{currencySymbol} {formatMoney(currentPoint.cumulative)} gastado</span>
-            </div>
-            <div
-              className={`h-2.5 w-0.5 ${
-                isUnderBudget ? "bg-emerald-500" : "bg-red-500"
-              }`}
-            />
-            <div
-              className={`h-3 w-3 rounded-full border-2 border-white shadow-sm ring-2 ${
-                isUnderBudget
-                  ? "bg-emerald-500 ring-emerald-200"
-                  : "bg-red-500 ring-red-200"
-              }`}
-            />
+            {selectedPoint ? (
+              <div className={`rounded-xl px-3 py-1.5 text-center text-white shadow-md ${isUnderBudget ? "bg-emerald-600 shadow-emerald-600/20" : "bg-red-600 shadow-red-600/20"}`}>
+                <p className="text-[9px] font-bold uppercase tracking-wide text-white/80">{selectedDateLabel}{selectedDayIsFuture ? " · Próximo" : " · Gasto del día"}</p>
+                <p className="text-[11px] font-extrabold leading-tight">
+                  {selectedDayIsFuture ? "Ese día todavía no llegó" : `${currencySymbol} ${formatMoney(chartPoint.dailyTotal)} gastado`}
+                </p>
+                {!selectedDayIsFuture && <p className="text-[9px] font-semibold text-white/80">Acumulado: {currencySymbol} {formatMoney(chartPoint.cumulative)}</p>}
+              </div>
+            ) : (
+              <>
+                <div className={`rounded-full px-3 py-1 text-[11px] font-extrabold shadow-md ${isUnderBudget ? "bg-emerald-500 text-white shadow-emerald-500/25" : "bg-red-500 text-white shadow-red-500/25"}`}>
+                  <span>{currencySymbol} {formatMoney(currentPoint.cumulative)} gastado</span>
+                </div>
+                <div className={`h-2.5 w-0.5 ${isUnderBudget ? "bg-emerald-500" : "bg-red-500"}`} />
+                <div className={`h-3 w-3 rounded-full border-2 border-white shadow-sm ring-2 ${isUnderBudget ? "bg-emerald-500 ring-emerald-200" : "bg-red-500 ring-red-200"}`} />
+              </>
+            )}
           </div>
 
           <svg
-            className="h-full w-full overflow-visible"
-            viewBox="0 0 400 130"
+            className="h-full w-full overflow-visible rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 cursor-crosshair touch-pan-y"
+            viewBox="0 0 400 150"
             preserveAspectRatio="none"
-            role="img"
-            aria-label={`Gasto acumulado ${currencySymbol} ${formatMoney(currentPoint.cumulative)} comparado con el ritmo ideal`}
+            role="group"
+            tabIndex={0}
+            aria-label="Gráfica interactiva de gastos diarios"
+            aria-describedby="daily-spending-chart-hint"
+            onPointerDown={(event) => selectChartDayAt(event.clientX, event.currentTarget.getBoundingClientRect())}
+            onPointerMove={(event) => {
+              if (event.pointerType === "mouse") selectChartDayAt(event.clientX, event.currentTarget.getBoundingClientRect());
+            }}
+            onKeyDown={(event) => {
+              const currentDay = selectedChartDay ?? currentPoint.day;
+              if (event.key === "ArrowLeft") {
+                event.preventDefault();
+                setSelectedChartDay(Math.max(1, currentDay - 1));
+              } else if (event.key === "ArrowRight") {
+                event.preventDefault();
+                setSelectedChartDay(Math.min(daysInMonth, currentDay + 1));
+              } else if (event.key === "Home") {
+                event.preventDefault();
+                setSelectedChartDay(1);
+              } else if (event.key === "End") {
+                event.preventDefault();
+                setSelectedChartDay(daysInMonth);
+              }
+            }}
           >
             <defs>
               <linearGradient id="copilotGradient" x1="0" y1="0" x2="0" y2="1">
@@ -614,6 +645,9 @@ export default function CopilotDashboard({
                 />
               </linearGradient>
             </defs>
+
+            {/* Transparent hit area so a tap anywhere in the plot selects that date. */}
+            <rect x="0" y="0" width="400" height="150" fill="transparent" pointerEvents="all" />
 
             {/* Dotted budget trajectory line */}
             <path
@@ -636,11 +670,30 @@ export default function CopilotDashboard({
               strokeLinecap="round"
               strokeLinejoin="round"
             />
+
+            {selectedPoint && !selectedDayIsFuture && (
+              <>
+                <line x1={chartPoint.x} x2={chartPoint.x} y1={chartPoint.y} y2="128" stroke="#0F172A" strokeOpacity="0.25" strokeDasharray="3 3" />
+                <circle cx={chartPoint.x} cy={chartPoint.y} r="5.5" fill={isUnderBudget ? "#059669" : "#DC2626"} stroke="white" strokeWidth="2.5" />
+              </>
+            )}
+
+            {chartDateTicks.map((day) => {
+              const x = 25 + ((day - 1) / Math.max(1, daysInMonth - 1)) * 350;
+              return (
+                <g key={day} aria-hidden="true">
+                  <line x1={x} x2={x} y1="130" y2="134" stroke="#CBD5E1" strokeWidth="1" />
+                  <text x={x} y="146" textAnchor="middle" fill="#94A3B8" fontSize="10" fontWeight="600">{day}</text>
+                </g>
+              );
+            })}
           </svg>
+          <p id="daily-spending-chart-hint" className="sr-only">Tocá o seleccioná una fecha para ver cuánto gastaste ese día. Con teclado, usá las flechas para cambiar de día.</p>
         </div>
+        {!selectedPoint && <p className="-mt-1 text-center text-[9px] font-medium text-slate-400">Tocá la gráfica para ver cuánto gastaste cada día</p>}
 
         {/* Quick Health Summary Pill Tags (Image 1 footer) */}
-        <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[10px] sm:text-xs">
+        <div className="mt-3 grid grid-cols-3 gap-1 border-t border-slate-100 pt-3 text-[11px] sm:text-xs">
           <div className="flex items-center gap-1.5 font-bold text-slate-700">
             <span
               className={`flex h-2 w-2 rounded-full ${
@@ -666,13 +719,13 @@ export default function CopilotDashboard({
               </strong>
             </span>
           </div>
-          <div className="text-slate-400 font-semibold">
+          <div className="text-center text-slate-600 font-semibold">
             Fijos:{" "}
             <strong className="text-slate-700">
               {metrics.fixedExpenseRatio.toFixed(1)}%
             </strong>
           </div>
-          <div className="text-slate-400 font-semibold">
+          <div className="text-right text-slate-600 font-semibold">
             Superávit:{" "}
             <strong
               className={
@@ -703,7 +756,7 @@ export default function CopilotDashboard({
               <h3 className="text-xs font-black text-slate-900 tracking-tight">
                 Ritmo del mes
               </h3>
-              <p className="text-[10px] text-slate-500 font-semibold">
+              <p className="text-[11px] text-slate-600 font-semibold">
                 Día {spendingPace.currentDay} de {spendingPace.totalDays} ({spendingPace.monthElapsedPercent}% del mes)
               </p>
             </div>
@@ -725,7 +778,7 @@ export default function CopilotDashboard({
         {/* Dual Progress Bars: Time Elapsed vs Budget Consumed */}
         <div className="space-y-2 mb-3">
           <div>
-            <div className="flex justify-between text-[10px] font-bold text-slate-400 mb-1">
+            <div className="flex justify-between text-[11px] font-bold text-slate-600 mb-1">
               <span>Mes transcurrido</span>
               <span className="font-mono text-slate-600">{spendingPace.monthElapsedPercent}%</span>
             </div>
@@ -738,7 +791,7 @@ export default function CopilotDashboard({
           </div>
 
           <div>
-            <div className="flex justify-between text-[10px] font-bold text-slate-400 mb-1">
+            <div className="flex justify-between text-[11px] font-bold text-slate-600 mb-1">
               <span>Presupuesto consumido</span>
               <span className={`font-mono font-black ${
                 spendingPace.budgetSpentPercent > spendingPace.monthElapsedPercent

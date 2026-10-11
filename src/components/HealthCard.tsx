@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { FinancialHealth, FinancialMetrics } from "@/lib/finance-engine";
+import { FinancialMetrics } from "@/lib/finance-engine";
 import { Activity, ShieldCheck, AlertTriangle, ShieldAlert, TrendingUp } from "lucide-react";
 
 interface HealthCardProps {

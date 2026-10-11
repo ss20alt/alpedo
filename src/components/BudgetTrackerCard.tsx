@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { FinancialMetrics, calculateBudgetGauge } from "@/lib/finance-engine";
-import { AlertTriangle, Flame, ShoppingCart, Sliders, Check, X, ShieldAlert } from "lucide-react";
+import { AlertTriangle, Flame, ShoppingCart, Sliders, Check, ShieldAlert } from "lucide-react";
 
 interface BudgetTrackerCardProps {
   metrics: FinancialMetrics;

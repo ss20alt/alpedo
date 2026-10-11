@@ -8,7 +8,6 @@ import {
   ArrowUpCircle,
   Flame,
   Check,
-  RotateCcw,
 } from "lucide-react";
 import { Transaction } from "@/lib/finance-engine";
 import { triggerHaptic } from "@/lib/haptics";
@@ -51,6 +50,7 @@ export default function TransactionModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [draftNotice, setDraftNotice] = useState<string | null>(null);
+  const [offlineNote, setOfflineNote] = useState<{ amount: string; description: string } | null>(null);
   const [isOnline, setIsOnline] = useState(true);
   const draftReady = useRef(false);
   const draftKey = `alpedo_transaction_draft_${userId}`;
@@ -100,6 +100,10 @@ export default function TransactionModal({
         } catch { setDraftNotice(null); }
       }
       setError(null);
+      try {
+        const note = JSON.parse(localStorage.getItem("alpedo_offline_capture") || "null");
+        setOfflineNote(!editingTransaction && note && typeof note.amount === "string" && typeof note.description === "string" ? note : null);
+      } catch { setOfflineNote(null); }
       setDragOffsetY(0);
       draftReady.current = true;
     }, 0);
@@ -343,6 +347,19 @@ export default function TransactionModal({
         )}
         {!isOnline && !editingTransaction && <p role="status" className="mt-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-900">Sin conexión. Podés guardar un borrador en este dispositivo y enviarlo cuando vuelvas a estar en línea.</p>}
         {draftNotice && !error && <p role="status" className="mt-2 text-xs font-semibold text-blue-700">{draftNotice}</p>}
+        {offlineNote && !editingTransaction && !initialPreset && <div className="mt-2 rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-slate-700">
+          <p className="font-bold">Nota sin conexión: {offlineNote.description} · {currencySymbol}{Number(offlineNote.amount).toLocaleString("es-PY")}</p>
+          <button type="button" disabled={Boolean(amount || description)} onClick={() => {
+            setType("expense");
+            setCategory("variable");
+            setAmount(offlineNote.amount);
+            setDescription(offlineNote.description);
+            setDate(getParaguayDateString());
+            localStorage.removeItem("alpedo_offline_capture");
+            setOfflineNote(null);
+            setDraftNotice("Nota recuperada. Revisá los datos antes de guardar.");
+          }} className="mt-2 min-h-11 rounded-lg bg-[#1656DB] px-4 font-bold text-white disabled:opacity-50">{amount || description ? "Terminá tu borrador para recuperarla" : "Recuperar nota"}</button>
+        </div>}
 
         {/* Scrollable Form Body */}
         <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0 mt-2">
@@ -478,7 +495,7 @@ export default function TransactionModal({
             {/* Monto con Tipografía Grande y Steppers Táctiles */}
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="text-[11px] font-black uppercase tracking-wider text-slate-400">
+                <label htmlFor="transaction-amount" className="text-[11px] font-black uppercase tracking-wider text-slate-400">
                   Monto ({currencySymbol})
                 </label>
                 {formattedAmountPreview() && (
@@ -492,6 +509,7 @@ export default function TransactionModal({
                   {currencySymbol}
                 </span>
                 <input
+                  id="transaction-amount"
                   type="number"
                   step="any"
                   inputMode="numeric"
@@ -521,35 +539,35 @@ export default function TransactionModal({
                 <button
                   type="button"
                   onClick={() => addAmount(10000)}
-                  className="shrink-0 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 px-2.5 py-1 text-xs font-mono font-bold transition active:scale-95 border border-slate-200/60"
+                  className="min-h-10 shrink-0 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 px-2.5 py-1 text-xs font-mono font-bold transition active:scale-95 border border-slate-200/60"
                 >
                   +10k
                 </button>
                 <button
                   type="button"
                   onClick={() => addAmount(25000)}
-                  className="shrink-0 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 px-2.5 py-1 text-xs font-mono font-bold transition active:scale-95 border border-slate-200/60"
+                  className="min-h-10 shrink-0 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 px-2.5 py-1 text-xs font-mono font-bold transition active:scale-95 border border-slate-200/60"
                 >
                   +25k
                 </button>
                 <button
                   type="button"
                   onClick={() => addAmount(50000)}
-                  className="shrink-0 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 px-2.5 py-1 text-xs font-mono font-bold transition active:scale-95 border border-slate-200/60"
+                  className="min-h-10 shrink-0 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 px-2.5 py-1 text-xs font-mono font-bold transition active:scale-95 border border-slate-200/60"
                 >
                   +50k
                 </button>
                 <button
                   type="button"
                   onClick={() => addAmount(100000)}
-                  className="shrink-0 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#1656DB] px-2.5 py-1 text-xs font-mono font-black transition active:scale-95 border border-blue-200/60"
+                  className="min-h-10 shrink-0 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#1656DB] px-2.5 py-1 text-xs font-mono font-black transition active:scale-95 border border-blue-200/60"
                 >
                   +100k
                 </button>
                 <button
                   type="button"
                   onClick={() => addAmount(500000)}
-                  className="shrink-0 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#1656DB] px-2.5 py-1 text-xs font-mono font-black transition active:scale-95 border border-blue-200/60"
+                  className="min-h-10 shrink-0 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#1656DB] px-2.5 py-1 text-xs font-mono font-black transition active:scale-95 border border-blue-200/60"
                 >
                   +500k
                 </button>
@@ -558,10 +576,11 @@ export default function TransactionModal({
 
             {/* Descripción con Chips Táctiles y Smart Suggestion */}
             <div>
-              <label className="block text-[11px] font-black uppercase tracking-wider text-slate-400 mb-1">
+              <label htmlFor="transaction-description" className="block text-[11px] font-black uppercase tracking-wider text-slate-400 mb-1">
                 Detalle / Descripción
               </label>
               <input
+                id="transaction-description"
                 type="text"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
@@ -629,14 +648,15 @@ export default function TransactionModal({
             {/* Fecha & Recurrente */}
             <div className="grid grid-cols-2 gap-3 pt-1">
               <div>
-                <label className="block text-[11px] font-black uppercase tracking-wider text-slate-400 mb-1">
+                <label htmlFor="transaction-date" className="block text-[11px] font-black uppercase tracking-wider text-slate-400 mb-1">
                   Fecha
                 </label>
                 <input
+                  id="transaction-date"
                   type="date"
                   value={date}
                   onChange={(e) => setDate(e.target.value)}
-                  className="w-full h-10 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-900 font-semibold focus:bg-white focus:border-blue-500 focus:outline-none transition"
+                  className="w-full h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-900 font-semibold focus:bg-white focus:border-blue-500 focus:outline-none transition"
                 />
               </div>
               <div className="flex flex-col justify-end">
@@ -662,6 +682,9 @@ export default function TransactionModal({
               type="button"
               onClick={() => {
                 triggerHaptic("light");
+                if (!editingTransaction) {
+                  try { localStorage.removeItem(draftKey); } catch { /* El navegador puede impedir el almacenamiento local. */ }
+                }
                 onClose();
               }}
               className="flex-1 h-12 rounded-xl border border-slate-200 bg-slate-100 text-xs font-bold text-slate-700 hover:bg-slate-200 transition active:scale-[0.98]"

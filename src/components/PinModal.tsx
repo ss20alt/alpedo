@@ -241,7 +241,7 @@ export default function PinModal({ isConfigured, onAuthenticated }: PinModalProp
               setMode("login");
               setError(null);
             }}
-            className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-black transition active:scale-95 ${
+            className={`flex-1 flex min-h-11 items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-black transition active:scale-95 ${
               mode === "login" || mode === "recovery"
                 ? "bg-white text-slate-900 shadow-sm"
                 : "text-slate-500 hover:text-slate-900"
@@ -258,7 +258,7 @@ export default function PinModal({ isConfigured, onAuthenticated }: PinModalProp
               setMode("register");
               setError(null);
             }}
-            className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-black transition active:scale-95 ${
+            className={`flex-1 flex min-h-11 items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-black transition active:scale-95 ${
               mode === "register"
                 ? "bg-[#1656DB] text-white shadow-sm"
                 : "text-slate-500 hover:text-slate-900"
@@ -284,12 +284,14 @@ export default function PinModal({ isConfigured, onAuthenticated }: PinModalProp
             {/* Optional Email input */}
             {useEmailLogin && (
               <div className="animate-in fade-in duration-200">
-                <label className="block text-xs font-bold text-slate-600 mb-1">
+                <label htmlFor="login-email" className="block text-xs font-bold text-slate-600 mb-1">
                   Correo Electrónico
                 </label>
                 <div className="relative">
                   <input
+                    id="login-email"
                     type="email"
+                    autoComplete="username"
                     value={loginEmail}
                     onChange={(e) => setLoginEmail(e.target.value)}
                     placeholder="tu-correo@ejemplo.com"
@@ -303,15 +305,17 @@ export default function PinModal({ isConfigured, onAuthenticated }: PinModalProp
             {/* PIN Input Display */}
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="text-xs font-bold text-slate-600">
+                <label htmlFor="login-pin" className="text-xs font-bold text-slate-600">
                   PIN de acceso
                 </label>
               </div>
 
               <div className="relative">
                 <input
+                  id="login-pin"
                   type="password"
                   inputMode="numeric"
+                  autoComplete="current-password"
                   value={pin}
                   onChange={(e) => setPin(e.target.value)}
                   placeholder="••••"
@@ -396,34 +400,38 @@ export default function PinModal({ isConfigured, onAuthenticated }: PinModalProp
         {mode === "register" && (
           <form onSubmit={handleRegisterSubmit} className="mt-3.5 space-y-2.5 animate-in fade-in duration-200">
             <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">
+              <label htmlFor="register-name" className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1">
                 Tu Nombre o Apodo
               </label>
               <div className="relative">
                 <input
+                  id="register-name"
                   type="text"
+                  autoComplete="name"
                   value={regName}
                   onChange={(e) => setRegName(e.target.value)}
                   placeholder="Ej: Santi, Vale, Kp"
                   required
-                  className="w-full text-xs font-bold rounded-xl border border-slate-200 bg-slate-50/70 pl-8 pr-3 py-2 text-slate-900 placeholder:text-slate-300 focus:bg-white focus:border-[#1656DB] focus:outline-none transition"
+                  className="h-11 w-full text-base font-semibold rounded-xl border border-slate-200 bg-slate-50/70 pl-8 pr-3 text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-[#1656DB] focus:outline-none transition"
                 />
                 <User className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
               </div>
             </div>
 
             <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">
+              <label htmlFor="register-email" className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1">
                 Correo Electrónico
               </label>
               <div className="relative">
                 <input
+                  id="register-email"
                   type="email"
+                  autoComplete="username"
                   value={regEmail}
                   onChange={(e) => setRegEmail(e.target.value)}
                   placeholder="tu-correo@ejemplo.com"
                   required
-                  className="w-full text-xs font-semibold rounded-xl border border-slate-200 bg-slate-50/70 pl-8 pr-3 py-2 text-slate-900 placeholder:text-slate-300 focus:bg-white focus:border-[#1656DB] focus:outline-none transition"
+                  className="h-11 w-full text-base font-semibold rounded-xl border border-slate-200 bg-slate-50/70 pl-8 pr-3 text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-[#1656DB] focus:outline-none transition"
                 />
                 <Mail className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
               </div>
@@ -431,34 +439,38 @@ export default function PinModal({ isConfigured, onAuthenticated }: PinModalProp
 
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">
+                <label htmlFor="register-pin" className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1">
                   Elegí tu PIN
                 </label>
                 <input
+                  id="register-pin"
                   type="password"
                   inputMode="numeric"
+                  autoComplete="new-password"
                   value={regPin}
                   onChange={(e) => setRegPin(e.target.value)}
                   placeholder="••••"
                   maxLength={12}
                   required
-                  className="w-full text-center tracking-widest text-lg font-mono rounded-xl border border-slate-200 bg-slate-50/70 px-2 py-2 text-slate-900 placeholder:text-slate-300 focus:bg-white focus:border-[#1656DB] focus:outline-none transition"
+                  className="h-11 w-full text-center tracking-widest text-lg font-mono rounded-xl border border-slate-200 bg-slate-50/70 px-2 text-slate-900 placeholder:text-slate-300 focus:bg-white focus:border-[#1656DB] focus:outline-none transition"
                 />
               </div>
 
               <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">
+                <label htmlFor="register-confirm-pin" className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1">
                   Confirmar PIN
                 </label>
                 <input
+                  id="register-confirm-pin"
                   type="password"
                   inputMode="numeric"
+                  autoComplete="new-password"
                   value={regConfirmPin}
                   onChange={(e) => setRegConfirmPin(e.target.value)}
                   placeholder="••••"
                   maxLength={12}
                   required
-                  className="w-full text-center tracking-widest text-lg font-mono rounded-xl border border-slate-200 bg-slate-50/70 px-2 py-2 text-slate-900 placeholder:text-slate-300 focus:bg-white focus:border-[#1656DB] focus:outline-none transition"
+                  className="h-11 w-full text-center tracking-widest text-lg font-mono rounded-xl border border-slate-200 bg-slate-50/70 px-2 text-slate-900 placeholder:text-slate-300 focus:bg-white focus:border-[#1656DB] focus:outline-none transition"
                 />
               </div>
             </div>

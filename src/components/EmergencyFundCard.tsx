@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { FinancialMetrics, calculateEmergencyFundAnalysis } from "@/lib/finance-engine";
-import { ShieldCheck, Edit3, Check, TrendingUp, Landmark, Lightbulb } from "lucide-react";
+import { ShieldCheck, Edit3, Check, Landmark, Lightbulb } from "lucide-react";
 
 interface EmergencyFundCardProps {
   metrics: FinancialMetrics;

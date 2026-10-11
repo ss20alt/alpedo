@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import AppTelemetry from "@/components/AppTelemetry";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -46,6 +47,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-[#EEF2F8] text-slate-900 overflow-x-hidden selection:bg-blue-600 selection:text-white">
+        <AppTelemetry />
         {children}
       </body>
     </html>

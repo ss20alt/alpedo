@@ -243,7 +243,7 @@ export default function LoanSimulator({ metrics, currencySymbol }: LoanSimulator
                   type="button"
                   aria-pressed={loanAmount === quick}
                   onClick={() => setLoanAmountInput(String(quick))}
-                  className={`min-h-11 min-w-0 rounded-xl px-1 text-[10px] sm:text-xs font-mono font-bold transition active:scale-95 ${
+                  className={`min-h-11 min-w-0 rounded-xl px-1 text-[11px] sm:text-xs font-mono font-bold transition active:scale-95 ${
                     loanAmount === quick
                       ? "bg-slate-900 text-white font-black shadow-sm"
                       : "bg-slate-100 text-slate-700 hover:bg-slate-200"
@@ -446,7 +446,7 @@ export default function LoanSimulator({ metrics, currencySymbol }: LoanSimulator
             <div className="grid grid-cols-2 gap-2 sm:gap-3">
               {/* Actual */}
               <div className="rounded-2xl border border-slate-200/80 bg-slate-50 p-3 text-center">
-                <span className="text-[10px] sm:text-[10px] font-bold text-slate-500 uppercase">Hoy (Sin Crédito)</span>
+                <span className="text-[11px] font-bold text-slate-600 uppercase">Hoy (Sin Crédito)</span>
                 <div className="text-lg sm:text-xl font-black font-mono text-slate-900 mt-0.5">
                   {metrics.totalIncome > 0 ? impact.currentHealth.score : "—"} <span className="text-xs text-slate-500 font-normal">{metrics.totalIncome > 0 ? "pts" : ""}</span>
                 </div>
@@ -457,7 +457,7 @@ export default function LoanSimulator({ metrics, currencySymbol }: LoanSimulator
 
               {/* Con Préstamo */}
               <div className="rounded-2xl border border-slate-200/80 bg-slate-50 p-3 text-center">
-                <span className="text-[10px] sm:text-[10px] font-bold text-slate-500 uppercase">Con este Préstamo</span>
+                <span className="text-[11px] font-bold text-slate-600 uppercase">Con este Préstamo</span>
                 <div className="text-lg sm:text-xl font-black font-mono text-slate-900 mt-0.5">
                   {metrics.totalIncome > 0 ? impact.projectedHealth.score : "—"} <span className="text-xs text-slate-500 font-normal">{metrics.totalIncome > 0 ? "pts" : ""}</span>
                 </div>

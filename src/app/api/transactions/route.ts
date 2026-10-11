@@ -33,6 +33,9 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const month = searchParams.get("month"); // e.g. "2026-10"
+    const isHistory = month === "all";
+    const isListRequest = searchParams.get("list") === "true";
+    const isFullRequest = searchParams.get("full") === "true";
 
     let queryStr = "SELECT * FROM transactions WHERE (user_id = ? OR (user_id IS NULL AND ? = 1))";
     const params: DbParameter[] = [user.id, user.id];
@@ -46,10 +49,50 @@ export async function GET(req: Request) {
       params.push(`${month}-01`, new Date(Date.UTC(year, monthNumber, 1)).toISOString().slice(0, 10));
     }
 
-    queryStr += " ORDER BY date DESC, created_at DESC";
+    if (isListRequest) {
+      const limit = Number(searchParams.get("limit") || 40);
+      const offset = Number(searchParams.get("offset") || 0);
+      if (!Number.isInteger(limit) || limit < 1 || limit > 100 || !Number.isInteger(offset) || offset < 0 || offset > 1_000_000) {
+        return NextResponse.json({ error: "Página inválida" }, { status: 400 });
+      }
+      const filters: string[] = [];
+      const filterParams: DbParameter[] = [...params];
+      const type = searchParams.get("type");
+      const category = searchParams.get("category");
+      const search = searchParams.get("search")?.trim() || "";
+      const amount = searchParams.get("amount");
+      if (type && type !== "all") {
+        if (!['income', 'expense'].includes(type)) return NextResponse.json({ error: "Tipo inválido" }, { status: 400 });
+        filters.push("type = ?"); filterParams.push(type);
+      }
+      if (category && category !== "all") {
+        if (!["fijo", "variable", "pasivo", "al_pedo"].includes(category)) return NextResponse.json({ error: "Categoría inválida" }, { status: 400 });
+        filters.push("category = ?"); filterParams.push(category);
+      }
+      if (search) {
+        if (search.length > 100) return NextResponse.json({ error: "Búsqueda demasiado larga" }, { status: 400 });
+        filters.push("description ILIKE ?"); filterParams.push(`%${search}%`);
+      }
+      if (searchParams.get("recurring") === "true") filters.push("is_recurring = true");
+      if (amount === "big") filters.push("type = 'expense' AND amount > 100000");
+      if (amount === "ant") filters.push("type = 'expense' AND amount < 30000");
+      const where = `${queryStr}${filters.length ? ` AND ${filters.map((f) => `(${f})`).join(" AND ")}` : ""}`;
+      const order = ({ amount_desc: "amount DESC", amount_asc: "amount ASC", date_asc: "date ASC, created_at ASC", date_desc: "date DESC, created_at DESC" } as Record<string, string>)[searchParams.get("sort") || "date_desc"];
+      if (!order) return NextResponse.json({ error: "Orden inválido" }, { status: 400 });
+      const totals = await db.queryOne<{ count: number; expense_sum: number }>(`SELECT COUNT(*)::integer AS count, COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) AS expense_sum FROM (${where}) AS scoped`, filterParams);
+      const transactions = await db.query<Transaction>(`${where} ORDER BY ${order} LIMIT ? OFFSET ?`, [...filterParams, limit, offset]);
+      return NextResponse.json({ transactions, total: totals?.count || 0, expenseSum: totals?.expense_sum || 0 }, { headers: { "Cache-Control": "no-store" } });
+    }
 
-    const rows = await db.query<Transaction>(queryStr, params);
-    const metrics = calculateFinancialMetrics(rows);
+    const rowQuery = `${queryStr} ORDER BY date DESC, created_at DESC`;
+    const rows = await db.query<Transaction>(isHistory && !isFullRequest ? `${rowQuery} LIMIT 40` : rowQuery, params);
+    const metricRows = isHistory
+      ? await db.query<Transaction>(`${queryStr.replace("SELECT *", "SELECT type, category, SUM(amount) AS amount")} GROUP BY type, category`, params)
+      : rows;
+    const metrics = calculateFinancialMetrics(metricRows);
+    const totalCount = isHistory
+      ? Number((await db.queryOne<{ count: number }>(`${queryStr.replace("SELECT *", "SELECT COUNT(*)::integer AS count")}`, params))?.count || 0)
+      : rows.length;
 
     // Get all distinct available months for selector for this user
     const monthsRows = await db.query<{ month: string }>(
@@ -98,6 +141,7 @@ export async function GET(req: Request) {
     return NextResponse.json(
       {
         transactions: rows,
+        totalCount,
         metrics,
         availableMonths,
         monthlyHistory: monthlyHistoryRows,

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import { recordPerformanceSample } from "@/lib/performance";
 import dynamic from "next/dynamic";
 import {
   LayoutDashboard,
@@ -9,12 +10,8 @@ import {
   Settings,
   Plus,
   Calendar,
-  ArrowRight,
   TrendingUp,
-  Flame,
   Layers,
-  Heart,
-  Trophy,
   Grid2X2,
   X,
   FileSpreadsheet,
@@ -31,7 +28,6 @@ import type { TransactionPreset } from "@/components/TransactionModal";
 import CopilotDashboard from "@/components/CopilotDashboard";
 import type { TourStep } from "@/components/InteractiveTour";
 import { triggerHaptic } from "@/lib/haptics";
-import FinanceIcon from "@/components/FinanceIcon";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { formatParaguayMonthLabel, getParaguayMonthString } from "@/lib/date-utils";
 
@@ -73,6 +69,7 @@ export default function Home() {
   });
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [transactionCount, setTransactionCount] = useState(0);
   const [metrics, setMetrics] = useState<FinancialMetrics | null>(null);
   const [monthlyHistory, setMonthlyHistory] = useState<Array<{
     month: string;
@@ -84,6 +81,9 @@ export default function Home() {
   const [availableMonths, setAvailableMonths] = useState<string[]>([]);
   const [dataLoading, setDataLoading] = useState<boolean>(false);
   const [dataError, setDataError] = useState<string | null>(null);
+  const [dataRevision, setDataRevision] = useState(0);
+  const dataRequestId = React.useRef(0);
+  const dataAbortController = React.useRef<AbortController | null>(null);
 
   const [currencySymbol, setCurrencySymbol] = useState<string>("₲");
 
@@ -107,15 +107,37 @@ export default function Home() {
   const [initialPreset, setInitialPreset] = useState<TransactionPreset | null>(null);
   const [isCueroOpen, setIsCueroOpen] = useState<boolean>(false);
   const [isToolsSheetOpen, setIsToolsSheetOpen] = useState<boolean>(false);
+  const toolsTriggerRef = React.useRef<HTMLButtonElement>(null);
+  const toolsCloseRef = React.useRef<HTMLButtonElement>(null);
   const [isTourOpen, setIsTourOpen] = useState<boolean>(false);
   const [privacyMode, setPrivacyMode] = useState<boolean>(false);
+  useEffect(() => {
+    if (!isToolsSheetOpen) return;
+    const trigger = toolsTriggerRef.current;
+    toolsCloseRef.current?.focus();
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsToolsSheetOpen(false);
+    };
+    window.addEventListener("keydown", onEscape);
+    return () => {
+      window.removeEventListener("keydown", onEscape);
+      trigger?.focus();
+    };
+  }, [isToolsSheetOpen]);
   const setCurrentTab = (tab: TourStep["targetTab"]) => {
     if (tab !== "transactions" && tab !== "grouped") {
       setSelectedMonth((month) => month === "all" ? getParaguayMonthString() : month);
     }
     setCurrentTabState(tab);
   };
+  const navTabClass = (tab: TourStep["targetTab"]) =>
+    `min-h-10 shrink-0 rounded-full border px-4 py-1.5 text-xs font-bold transition-[background-color,border-color,box-shadow,color,transform] duration-200 ease-out active:scale-[0.97] ${
+      currentTab === tab
+        ? "border-white/40 bg-white/15 text-white shadow-[0_2px_8px_rgba(0,0,0,0.08)]"
+        : "border-transparent text-white/80 hover:border-white/10 hover:bg-white/10 hover:text-white"
+    }`;
   const tabsContainerRef = React.useRef<HTMLDivElement>(null);
+  const mainRef = React.useRef<HTMLElement>(null);
   const [tabScrollEdges, setTabpcrollEdges] = useState({ left: false, right: true });
 
   const updateTabScrollEdges = useCallback(() => {
@@ -164,21 +186,29 @@ export default function Home() {
   }, [updateTabScrollEdges]);
 
   useEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => {
-        window.scrollTo(0, 0);
-      });
-    });
-
-    if (tabsContainerRef.current) {
-      const activeBtn = tabsContainerRef.current.querySelector<HTMLElement>(`[data-tab="${currentTab}"]`);
-      if (activeBtn) {
-        activeBtn.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
-      }
-    }
-
-    return () => window.cancelAnimationFrame(frame);
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const animation = mainRef.current?.animate(
+      [
+        { opacity: 0.78, transform: "translateY(5px)" },
+        { opacity: 1, transform: "translateY(0)" },
+      ],
+      { duration: 180, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
+    );
+    return () => animation?.cancel();
   }, [currentTab]);
+
+  useEffect(() => {
+    // The tour owns vertical positioning while it guides the user to a section.
+    if (!isTourOpen) window.scrollTo(0, 0);
+
+    const tabs = tabsContainerRef.current;
+    const activeBtn = tabs?.querySelector<HTMLElement>(`[data-tab="${currentTab}"]`);
+    if (!tabs || !activeBtn) return;
+
+    const targetLeft = activeBtn.offsetLeft + activeBtn.offsetWidth / 2 - tabs.clientWidth / 2;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    tabs.scrollTo({ left: targetLeft, behavior: reducedMotion ? "instant" : "smooth" });
+  }, [currentTab, isTourOpen]);
 
   const checkAuth = useCallback(async () => {
     try {
@@ -249,55 +279,30 @@ export default function Home() {
     }
   };
 
-  const handleUpdateBudgets = async (newAlPedo: number, newVariable: number) => {
-    try {
-      const res = await fetch("/api/settings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          budget_al_pedo_limit: newAlPedo,
-          budget_variable_limit: newVariable,
-        }),
-      });
-      if (res.ok) {
-        setBudgetAlPedoLimit(newAlPedo);
-        setBudgetVariableLimit(newVariable);
-      }
-    } catch {
-      // ignore
-    }
-  };
-
-  const handleUpdateEmergencyFund = async (saved: number) => {
-    try {
-      const res = await fetch("/api/settings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          emergency_fund_saved: saved,
-        }),
-      });
-      if (res.ok) {
-        setEmergencyFundSaved(saved);
-      }
-    } catch {
-      // ignore
-    }
-  };
-
   const fetchData = useCallback(async (forcedMonth?: string) => {
+    const startedAt = performance.now();
+    const requestId = ++dataRequestId.current;
+    dataAbortController.current?.abort();
+    const controller = new AbortController();
+    dataAbortController.current = controller;
+    const timeout = window.setTimeout(() => controller.abort(), 12000);
     try {
       setDataLoading(true);
       setDataError(null);
       const targetMonth = forcedMonth !== undefined ? forcedMonth : selectedMonth;
-      const res = await fetch(`/api/transactions?month=${targetMonth}`, { signal: AbortSignal.timeout(12000), cache: "no-store" });
+      const res = await fetch(`/api/transactions?month=${targetMonth}`, { signal: controller.signal, cache: "no-store" });
+      if (requestId !== dataRequestId.current) return;
       if (res.status === 401) {
         setIsAuthenticated(false);
         return;
       }
       if (res.ok) {
         const data = await res.json();
+        if (requestId !== dataRequestId.current) return;
         setTransactions(data.transactions || []);
+        setTransactionCount(data.totalCount || 0);
+        recordPerformanceSample("DATA", performance.now() - startedAt, `data-${Date.now()}-${requestId}`);
+        setDataRevision((revision) => revision + 1);
         setMetrics(data.metrics || null);
         if (data.monthlyHistory) setMonthlyHistory(data.monthlyHistory);
         if (data.recurringExpenses) setRecurringExpenses(data.recurringExpenses);
@@ -306,13 +311,23 @@ export default function Home() {
         }
       } else throw new Error("No se pudieron cargar los movimientos");
     } catch {
+      if (requestId !== dataRequestId.current) return;
       setMetrics(null);
       setTransactions([]);
       setDataError("No pudimos cargar tus datos. Revisá la conexión e intentá de nuevo.");
     } finally {
-      setDataLoading(false);
+      window.clearTimeout(timeout);
+      if (requestId === dataRequestId.current) {
+        dataAbortController.current = null;
+        setDataLoading(false);
+      }
     }
   }, [selectedMonth]);
+
+  useEffect(() => () => {
+    dataRequestId.current += 1;
+    dataAbortController.current?.abort();
+  }, []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void checkAuth(), 0);
@@ -335,10 +350,13 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "logout" }),
       });
+      dataRequestId.current += 1;
+      dataAbortController.current?.abort();
       setIsAuthenticated(false);
       setCurrentUser(null);
       setMetrics(null);
       setTransactions([]);
+      setTransactionCount(0);
       setPrivacyMode(false);
     } catch {
       // ignore
@@ -473,15 +491,12 @@ export default function Home() {
     );
   }
 
-  const formatMoney = (val: number) => {
-    return Math.round(val).toLocaleString("es-PY");
-  };
   const currentMonth = getParaguayMonthString();
 
   return (
     <div className="app-viewport bg-[#EEF2F8] text-slate-900 flex flex-col font-sans selection:bg-blue-600 selection:text-white">
       {/* Alpedo app header */}
-      <header className="sticky top-0 z-30 bg-gradient-to-b from-[#104BC9] via-[#1656DB] to-[#1C5FE6] text-white pt-safe shadow-md pb-2.5">
+      <header className="sticky top-0 z-30 bg-gradient-to-b from-[#1252c8] via-[#165bd2] to-[#1b61d7] text-white pt-safe shadow-[0_2px_10px_rgba(15,23,42,0.10)] pb-2.5">
         <div className="mx-auto flex max-w-lg sm:max-w-2xl md:max-w-4xl items-center justify-between px-4 sm:px-6 pt-1.5 pb-2">
           {/* Left: User Avatar & Settings Trigger */}
           <button
@@ -577,11 +592,7 @@ export default function Home() {
                   data-tab="dashboard"
                   aria-current={currentTab === "dashboard" ? "page" : undefined}
                   onClick={() => setCurrentTab("dashboard")}
-                  className={`rounded-full min-h-10 px-4 py-1.5 lg:min-h-0 text-xs font-black transition shrink-0 ${
-                    currentTab === "dashboard"
-                      ? "border border-white/90 bg-white/20 text-white shadow-sm backdrop-blur-md"
-                      : "text-white/75 hover:text-white hover:bg-white/10"
-                  }`}
+                  className={navTabClass("dashboard")}
                 >
                   Tablero
                 </button>
@@ -589,11 +600,7 @@ export default function Home() {
                   data-tab="transactions"
                   aria-current={currentTab === "transactions" ? "page" : undefined}
                   onClick={() => setCurrentTab("transactions")}
-                  className={`rounded-full min-h-10 px-4 py-1.5 lg:min-h-0 text-xs font-black transition shrink-0 ${
-                    currentTab === "transactions"
-                      ? "border border-white/90 bg-white/20 text-white shadow-sm backdrop-blur-md"
-                      : "text-white/75 hover:text-white hover:bg-white/10"
-                  }`}
+                  className={navTabClass("transactions")}
                 >
                   Movimientos
                 </button>
@@ -601,11 +608,7 @@ export default function Home() {
                   data-tab="grouped"
                   aria-current={currentTab === "grouped" ? "page" : undefined}
                   onClick={() => setCurrentTab("grouped")}
-                  className={`rounded-full min-h-10 px-4 py-1.5 lg:min-h-0 text-xs font-black transition shrink-0 ${
-                    currentTab === "grouped"
-                      ? "border border-white/90 bg-white/20 text-white shadow-sm backdrop-blur-md"
-                      : "text-white/75 hover:text-white hover:bg-white/10"
-                  }`}
+                  className={navTabClass("grouped")}
                 >
                   Comercios
                 </button>
@@ -613,11 +616,7 @@ export default function Home() {
                   data-tab="couples"
                   aria-current={currentTab === "couples" ? "page" : undefined}
                   onClick={() => setCurrentTab("couples")}
-                  className={`rounded-full min-h-10 px-4 py-1.5 lg:min-h-0 text-xs font-black transition shrink-0 ${
-                    currentTab === "couples"
-                      ? "border border-white/90 bg-white/20 text-white shadow-sm backdrop-blur-md"
-                      : "text-white/75 hover:text-white hover:bg-white/10"
-                  }`}
+                  className={navTabClass("couples")}
                 >
                   Pareja
                 </button>
@@ -625,11 +624,7 @@ export default function Home() {
                   data-tab="challenge"
                   aria-current={currentTab === "challenge" ? "page" : undefined}
                   onClick={() => setCurrentTab("challenge")}
-                  className={`rounded-full min-h-10 px-4 py-1.5 lg:min-h-0 text-xs font-black transition shrink-0 ${
-                    currentTab === "challenge"
-                      ? "border border-white/90 bg-white/20 text-white shadow-sm backdrop-blur-md"
-                      : "text-white/75 hover:text-white hover:bg-white/10"
-                  }`}
+                  className={navTabClass("challenge")}
                 >
                   Reto 1%
                 </button>
@@ -637,11 +632,7 @@ export default function Home() {
                   data-tab="streaks"
                   aria-current={currentTab === "streaks" ? "page" : undefined}
                   onClick={() => setCurrentTab("streaks")}
-                  className={`rounded-full min-h-10 px-4 py-1.5 lg:min-h-0 text-xs font-black transition shrink-0 ${
-                    currentTab === "streaks"
-                      ? "border border-white/90 bg-white/20 text-white shadow-sm backdrop-blur-md"
-                      : "text-white/75 hover:text-white hover:bg-white/10"
-                  }`}
+                  className={navTabClass("streaks")}
                 >
                   Rachas
                 </button>
@@ -649,11 +640,7 @@ export default function Home() {
                   data-tab="loans"
                   aria-current={currentTab === "loans" ? "page" : undefined}
                   onClick={() => setCurrentTab("loans")}
-                  className={`rounded-full min-h-10 px-4 py-1.5 lg:min-h-0 text-xs font-black transition shrink-0 ${
-                    currentTab === "loans"
-                      ? "border border-white/90 bg-white/20 text-white shadow-sm backdrop-blur-md"
-                      : "text-white/75 hover:text-white hover:bg-white/10"
-                  }`}
+                  className={navTabClass("loans")}
                 >
                   Préstamos
                 </button>
@@ -685,7 +672,7 @@ export default function Home() {
                 }}
                 aria-label="Mes de movimientos"
                 title="Elegir mes"
-                className="h-10 w-24 appearance-none rounded-full border border-white/35 bg-white/15 pl-8 pr-2 text-xs font-extrabold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 cursor-pointer backdrop-blur-md hover:bg-white/25 transition"
+                className="h-10 w-24 appearance-none rounded-full border border-white/25 bg-white/10 pl-8 pr-2 text-xs font-bold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 cursor-pointer hover:bg-white/20 transition-colors duration-200"
               >
                 <option value={currentMonth} className="text-slate-900 bg-white">
                   {formatParaguayMonthLabel(currentMonth)}
@@ -729,6 +716,7 @@ export default function Home() {
 
       {/* Main Content Area with Touch Pull-to-Refresh */}
       <main
+        ref={mainRef}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
@@ -855,6 +843,13 @@ export default function Home() {
                 initialCategory={txFilterCategory}
                 initialRecurringOnly={txFilterRecurring}
                 privacyMode={privacyMode}
+                selectedMonth={selectedMonth}
+                dataRevision={dataRevision}
+                transactionCount={transactionCount}
+                onClearInitialFilters={() => {
+                  setTxFilterCategory("all");
+                  setTxFilterRecurring(false);
+                }}
               />
             )}
 
@@ -869,6 +864,9 @@ export default function Home() {
                 onToggleAlPedo={handleToggleAlPedo}
                 defaultView="grouped"
                 privacyMode={privacyMode}
+                selectedMonth={selectedMonth}
+                dataRevision={dataRevision}
+                transactionCount={transactionCount}
               />
             )}
 
@@ -899,6 +897,7 @@ export default function Home() {
                 ? "text-[#1656DB] font-black"
                 : "text-slate-400 hover:text-slate-600"
             }`}
+            aria-current={currentTab === "dashboard" ? "page" : undefined}
           >
             <LayoutDashboard className={`h-5 w-5 ${currentTab === "dashboard" ? "stroke-[2.5]" : ""}`} />
             <span className="text-[10px] tracking-tight">Tablero</span>
@@ -910,6 +909,7 @@ export default function Home() {
               triggerHaptic("selection");
               setCurrentTab("transactions");
             }}
+            aria-current={currentTab === "transactions" ? "page" : undefined}
             className={`flex flex-col items-center justify-center gap-1 h-full transition active:scale-90 ${
               currentTab === "transactions"
                 ? "text-[#1656DB] font-black"
@@ -934,6 +934,7 @@ export default function Home() {
 
           {/* 4. Más (Herramientas Sheet) */}
           <button
+            ref={toolsTriggerRef}
             onClick={() => {
               triggerHaptic("selection");
               setIsToolsSheetOpen(true);
@@ -943,6 +944,8 @@ export default function Home() {
                 ? "text-[#1656DB] font-black"
                 : "text-slate-400 hover:text-slate-600"
             }`}
+            aria-label="Más secciones y herramientas"
+            aria-expanded={isToolsSheetOpen}
           >
             <Grid2X2 className="h-5 w-5" />
             <span className="text-[10px] tracking-tight">Más</span>
@@ -976,16 +979,17 @@ export default function Home() {
             className="fixed inset-0"
             onClick={() => setIsToolsSheetOpen(false)}
           />
-          <div className="relative w-full rounded-t-3xl border-t border-slate-200 bg-white p-5 shadow-2xl z-10 pb-safe animate-in slide-in-from-bottom duration-250 text-slate-900">
+          <div role="dialog" aria-modal="true" aria-labelledby="mobile-tools-title" className="relative w-full max-h-[90dvh] overflow-y-auto touch-scroll rounded-t-3xl border-t border-slate-200 bg-white p-5 shadow-2xl z-10 pb-safe animate-in slide-in-from-bottom duration-250 text-slate-900">
             <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-slate-300" />
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
               <div>
-                <h3 className="text-base font-black text-slate-900">Herramientas & Secciones</h3>
+                <h3 id="mobile-tools-title" className="text-base font-black text-slate-900">Herramientas & Secciones</h3>
                 <p className="text-xs text-slate-400">Funciones complementarias</p>
               </div>
               <button
+                ref={toolsCloseRef}
                 onClick={() => setIsToolsSheetOpen(false)}
-                className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition active:scale-95"
+                className="flex h-11 w-11 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition active:scale-95"
                 aria-label="Cerrar"
               >
                 <X className="h-5 w-5" />
@@ -1070,7 +1074,7 @@ export default function Home() {
                 </div>
               </button>
 
-              <a
+              {!privacyMode && <a
                 href="/api/transactions/export"
                 download
                 className="flex items-center gap-3 p-3.5 rounded-2xl border border-slate-200/80 bg-slate-50/80 text-slate-800 hover:bg-slate-100 transition active:scale-95"
@@ -1082,23 +1086,11 @@ export default function Home() {
                   <div className="text-xs font-bold text-slate-900">Exportar movimientos</div>
                   <div className="text-[10px] text-slate-500">CSV compatible con Excel</div>
                 </div>
-              </a>
+              </a>}
             </div>
           </div>
         </div>
       )}
-
-      {/* Floating Assistant Icon (¿Me da el cuero?) */}
-      <button
-        onClick={() => setIsCueroOpen(true)}
-        className="fixed bottom-20 md:bottom-24 right-4 md:right-8 z-40 hidden md:flex items-center justify-center h-12 w-12 rounded-full bg-gradient-to-tr from-[#104BC9] via-[#1656DB] to-[#1C5FE6] text-white font-black text-2xl shadow-xl shadow-blue-600/35 border-2 border-white active:scale-90 hover:scale-105 transition-transform duration-200"
-        title="Preguntale al Kape: ¿Me da el cuero?"
-        aria-label="Asistente Kape"
-      >
-        <FinanceIcon name="brand" className="h-6 w-6 text-white" />
-        <span aria-hidden="true" className="absolute -top-0.5 -right-0.5 h-3 w-3 rounded-full bg-emerald-400 shadow ring-2 ring-white">
-        </span>
-      </button>
 
       {/* Transaction Modal (Bottom Sheet on mobile with native gestures) */}
       <TransactionModal

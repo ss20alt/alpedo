@@ -14,13 +14,12 @@ import {
   Trash2,
   HelpCircle,
   BookOpen,
-  User,
   Share2,
-  Copy,
   KeyRound,
 } from "lucide-react";
 import { triggerHaptic } from "@/lib/haptics";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import { percentile75, readPerformanceSamples, type PerformanceSamples } from "@/lib/performance";
 
 interface SettingsTabProps {
   currentUser?: { id: number; name: string; email: string } | null;
@@ -57,9 +56,12 @@ export default function SettingsTab({
   const [clearSuccess, setClearSuccess] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const [backupNotice, setBackupNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [pendingBackup, setPendingBackup] = useState<{ name: string; data: Record<string, unknown>; details: string } | null>(null);
+  const [restoringBackup, setRestoringBackup] = useState(false);
 
   // Invite link state
   const [copiedInvite, setCopiedInvite] = useState(false);
+  const [webVitals, setWebVitals] = useState<PerformanceSamples | null>(null);
 
   const handleCopyInviteLink = () => {
     triggerHaptic("selection");
@@ -170,30 +172,40 @@ export default function SettingsTab({
     }
   };
 
-  // Download backup
-  const handleDownloadBackup = () => {
-    triggerHaptic("light");
-    window.location.href = "/api/backup";
-  };
-
-  // Upload backup
+  // Preview locally before modifying account data.
   const handleUploadBackup = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     try {
+      if (file.size > 2_000_000) throw new Error("El respaldo supera 2 MB.");
       const text = await file.text();
-      const parsed = JSON.parse(text);
+      const parsed: unknown = JSON.parse(text);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || !Array.isArray((parsed as Record<string, unknown>).transactions)) throw new Error("El archivo no tiene movimientos válidos.");
+      const data = parsed as Record<string, unknown>;
+      const sections = [["transactions", "movimientos"], ["savings_challenge", "retos"], ["couples_goals", "metas"], ["couples_contributions", "aportes"], ["friend_streaks", "rachas"], ["simulations", "simulaciones"]] as const;
+      const details = sections.map(([key, label]) => `${Array.isArray(data[key]) ? data[key].length : 0} ${label}`).join(", ");
+      setPendingBackup({ name: file.name, data, details });
+      setBackupNotice(null);
+    } catch (error) {
+      setBackupNotice({ type: "error", text: error instanceof Error ? error.message : "Archivo inválido." });
+    } finally {
+      e.target.value = "";
+    }
+  };
 
+  const handleConfirmBackup = async () => {
+    if (!pendingBackup) return;
+    setRestoringBackup(true);
+    try {
       const res = await fetch("/api/backup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(parsed),
+        body: JSON.stringify(pendingBackup.data),
       });
-
       if (res.ok) {
+        const result = await res.json();
         triggerHaptic("success");
-        setBackupNotice({ type: "success", text: "Copia restaurada correctamente." });
+        setBackupNotice({ type: result.skipped > 0 ? "error" : "success", text: `${result.restored} registros restaurados${result.remapped ? ` (${result.remapped} movimientos reasignados a esta cuenta)` : ""}${result.skipped ? `; ${result.skipped} omitidos por conflicto o datos inválidos` : ""}.` });
         onRefreshData();
       } else {
         triggerHaptic("error");
@@ -202,9 +214,10 @@ export default function SettingsTab({
       }
     } catch {
       triggerHaptic("error");
-      setBackupNotice({ type: "error", text: "Archivo inválido o sin conexión. Revisá el JSON e intentá de nuevo." });
+      setBackupNotice({ type: "error", text: "Sin conexión. No se pudo restaurar la copia." });
     } finally {
-      e.target.value = "";
+      setPendingBackup(null);
+      setRestoringBackup(false);
     }
   };
 
@@ -297,12 +310,14 @@ export default function SettingsTab({
 
         <form onSubmit={handleChangePin} className="space-y-3.5 sm:space-y-4">
           <div>
-            <label className="block text-[11px] font-black uppercase tracking-wider text-slate-400 mb-1">
+            <label htmlFor="settings-current-pin" className="block text-[11px] font-black uppercase tracking-wider text-slate-400 mb-1">
               PIN Actual
             </label>
             <input
+              id="settings-current-pin"
               type="password"
               inputMode="numeric"
+              autoComplete="current-password"
               value={oldPin}
               onChange={(e) => setOldPin(e.target.value)}
               placeholder="••••"
@@ -311,12 +326,14 @@ export default function SettingsTab({
           </div>
 
           <div>
-            <label className="block text-[11px] font-black uppercase tracking-wider text-slate-400 mb-1">
+            <label htmlFor="settings-new-pin" className="block text-[11px] font-black uppercase tracking-wider text-slate-400 mb-1">
               Nuevo PIN (6 a 12 números)
             </label>
             <input
+              id="settings-new-pin"
               type="password"
               inputMode="numeric"
+              autoComplete="new-password"
               value={newPin}
               onChange={(e) => setNewPin(e.target.value)}
               placeholder="••••"
@@ -381,24 +398,25 @@ export default function SettingsTab({
         </p>
 
         <div className="space-y-3">
-          <button
-            onClick={handleDownloadBackup}
+          <a
+            href="/api/backup"
+            download
+            onClick={() => triggerHaptic("light")}
             className="flex w-full h-12 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs font-bold text-slate-700 hover:bg-slate-100 active:scale-95 transition"
           >
             <Download className="h-4 w-4 text-[#1656DB]" />
             <span>Descargar Respaldo Completo (JSON)</span>
-          </button>
+          </a>
 
-          <button
-            onClick={() => {
-              triggerHaptic("light");
-              window.location.href = "/api/transactions/export";
-            }}
+          <a
+            href="/api/transactions/export"
+            download
+            onClick={() => triggerHaptic("light")}
             className="flex w-full h-12 items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-bold text-emerald-800 hover:bg-emerald-100 active:scale-95 transition"
           >
             <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
             <span>Exportar Movimientos a Excel (CSV)</span>
-          </button>
+          </a>
 
           <label className="flex w-full h-12 items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50/70 p-3 text-xs font-bold text-slate-600 hover:bg-slate-100 active:scale-95 cursor-pointer transition">
             <Upload className="h-4 w-4 text-cyan-600" />
@@ -456,21 +474,23 @@ export default function SettingsTab({
           {backupNotice && <p role="status" aria-live="polite" className={`mt-2 text-xs font-bold ${backupNotice.type === "error" ? "text-rose-700" : "text-emerald-700"}`}>{backupNotice.text}</p>}
         </div>
 
-        <div className="mt-5 border-t border-slate-100 pt-3">
-          <button
-            onClick={() => {
-              triggerHaptic("medium");
-              onLogout();
-            }}
-            className="flex items-center gap-2 text-xs font-black text-rose-600 hover:text-rose-700 active:scale-95 transition"
-          >
-            <LogOut className="h-4 w-4" />
-            <span>Cerrar Sesión Segura</span>
-          </button>
-        </div>
       </div>
 
       {/* 5. Guía Interactiva & Tour del Sistema */}
+      <div className="rounded-[28px] border border-slate-200 bg-white p-4 sm:p-6 text-slate-900 md:col-span-2">
+        <h3 className="text-sm font-black">Rendimiento en este dispositivo</h3>
+        <p className="mt-1 text-xs text-slate-500">Mediciones locales de carga, respuesta al toque, estabilidad y carga de datos. Se conservan hasta 30 muestras por métrica, sin datos de tu cuenta.</p>
+        <button type="button" onClick={() => setWebVitals(readPerformanceSamples())} className="mt-3 min-h-11 rounded-xl bg-slate-100 px-4 text-xs font-bold text-slate-700">Ver mediciones</button>
+        {webVitals && <div className="mt-3 grid grid-cols-2 gap-2 text-center text-xs sm:grid-cols-4">
+          {(["LCP", "INP", "CLS", "DATA"] as const).map((name) => {
+            const values = (webVitals[name] || []).map((sample) => sample.value);
+            const p75 = percentile75(values);
+            const target = { LCP: 2500, INP: 200, CLS: 0.1, DATA: 1500 }[name];
+            return <div key={name} className="rounded-xl bg-slate-50 p-3"><strong className="block">{name}</strong><span className={p75 === null ? "text-slate-500" : p75 <= target ? "text-emerald-700" : "text-amber-700"}>{p75 === null ? "Pendiente" : name === "CLS" ? p75.toFixed(3) : `${Math.round(p75)} ms`}</span><small className="block text-slate-500">{values.length} muestras · P75</small></div>;
+          })}
+        </div>}
+        {webVitals && <p className="mt-2 text-[11px] text-slate-500">DATA mide la respuesta de tus movimientos; su meta de 1,5 s es orientativa. LCP, INP y CLS son métricas del navegador. Medí varias cargas e interacciones en un teléfono real.</p>}
+      </div>
       <div className="rounded-[28px] border border-blue-100 bg-gradient-to-br from-blue-50/70 via-white to-blue-50/30 p-4 sm:p-6 shadow-[0_4px_24px_rgba(22,86,219,0.06)] text-slate-900 md:col-span-2">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="space-y-1">
@@ -500,6 +520,7 @@ export default function SettingsTab({
         </div>
       </div>
       {confirmClear && <ConfirmDialog title="¿Eliminar todos los movimientos?" description="Se borrarán los gastos e ingresos de esta cuenta. Esta acción no se puede deshacer. Descargá un respaldo antes si querés conservarlos." confirmLabel="Eliminar" destructive busy={clearing} onCancel={() => setConfirmClear(false)} onConfirm={() => void handleClearAllTransactions()} />}
+      {pendingBackup && <ConfirmDialog title="Restaurar respaldo" description={`Archivo: ${pendingBackup.name}. Contiene ${pendingBackup.details}. Puede actualizar datos que ya existen en esta cuenta. Los movimientos de otra cuenta se reasignarán cuando sea posible. Revisá que sea el archivo correcto antes de continuar.`} confirmLabel="Restaurar" busy={restoringBackup} onCancel={() => { if (!restoringBackup) setPendingBackup(null); }} onConfirm={() => void handleConfirmBackup()} />}
     </div>
   );
 }

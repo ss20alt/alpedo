@@ -117,8 +117,8 @@ export function calculateFinancialHealth(
   // Fixed rigidity penalty or bonus (-20 to +10)
   if (fixedExpenseRatio <= 40) score += 10;
   else if (fixedExpenseRatio <= 55) score += 5;
-  else if (fixedExpenseRatio > 70) score -= 15;
   else if (fixedExpenseRatio > 85) score -= 25;
+  else if (fixedExpenseRatio > 70) score -= 15;
 
   // Waste ("Al Pedo") impact (-25 to +5)
   if (alPedoRatio <= 5) score += 5;
@@ -377,8 +377,6 @@ export interface BudgetGauge {
 export function calculateBudgetGauge(spent: number, limit: number): BudgetGauge {
   const percent = limit > 0 ? (spent / limit) * 100 : 0;
   const remaining = Math.max(0, limit - spent);
-  const isOver = spent > limit && limit > 0;
-
   if (limit <= 0) {
     return {
       limit: 0,

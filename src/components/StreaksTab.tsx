@@ -229,7 +229,7 @@ export default function StreaksTab() {
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-orange-100 text-[11px]">1</span>
               El registro marca la racha
             </p>
-            <p className="mt-0.5 pl-8 text-[10px] leading-snug text-slate-600 sm:text-[11px] sm:leading-relaxed">
+            <p className="mt-1 pl-8 text-xs leading-relaxed text-slate-600">
               Un gasto Al Pedo reinicia tu contador.
             </p>
           </div>
@@ -238,7 +238,7 @@ export default function StreaksTab() {
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-100 text-[11px]">2</span>
               Desafío entre amigos
             </p>
-            <p className="mt-0.5 pl-8 text-[10px] leading-snug text-slate-600 sm:text-[11px] sm:leading-relaxed">
+            <p className="mt-1 pl-8 text-xs leading-relaxed text-slate-600">
               Con código, comparás solo los días de racha.
             </p>
           </div>
@@ -247,7 +247,7 @@ export default function StreaksTab() {
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[11px]">3</span>
               Privacidad
             </p>
-            <p className="mt-0.5 pl-8 text-[10px] leading-snug text-slate-600 sm:text-[11px] sm:leading-relaxed">
+            <p className="mt-1 pl-8 text-xs leading-relaxed text-slate-600">
               Tus montos y movimientos no se comparten.
             </p>
           </div>

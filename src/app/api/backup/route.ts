@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getParaguayDateString } from "@/lib/date-utils";
 import db from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
+import crypto from "node:crypto";
 
 export async function GET() {
   const user = await getCurrentUser();
@@ -111,21 +112,32 @@ export async function POST(req: Request) {
     }
 
     return await db.withTransaction(async () => {
+    let restored = 0;
+    let skipped = 0;
+    let remapped = 0;
     // 1. Restore Transactions
     for (const t of backupTransactions) {
-      await db.execute(
+      const existing = await db.queryOne<{ user_id: number | null }>("SELECT user_id FROM transactions WHERE id = ?", [t.id]);
+      let transactionId = t.id;
+      if (existing && existing.user_id !== user.id && !(existing.user_id === null && user.id === 1)) {
+        const digest = crypto.createHash("sha256").update(`${user.id}:${t.id}`).digest("hex");
+        transactionId = `${digest.slice(0, 8)}-${digest.slice(8, 12)}-${digest.slice(12, 16)}-${digest.slice(16, 20)}-${digest.slice(20, 32)}`;
+        remapped += 1;
+      }
+      const affected = await db.execute(
         `INSERT INTO transactions (id, user_id, type, category, amount, description, date, is_recurring, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT (id) DO UPDATE SET
+           user_id = EXCLUDED.user_id,
            type = EXCLUDED.type,
            category = EXCLUDED.category,
            amount = EXCLUDED.amount,
            description = EXCLUDED.description,
            date = EXCLUDED.date,
            is_recurring = EXCLUDED.is_recurring
-         WHERE transactions.user_id = EXCLUDED.user_id`,
+         WHERE transactions.user_id = EXCLUDED.user_id OR (transactions.user_id IS NULL AND EXCLUDED.user_id = 1)`,
         [
-          t.id,
+          transactionId,
           user.id,
           t.type,
           t.category,
@@ -136,13 +148,15 @@ export async function POST(req: Request) {
           t.created_at || new Date().toISOString(),
         ]
       );
+      if (affected) restored += 1;
+      else skipped += 1;
     }
 
     // 2. Restore Savings Challenge
     if (data.savings_challenge && Array.isArray(data.savings_challenge)) {
       for (const c of data.savings_challenge) {
         const challengeId = user.id === 1 ? "default" : `user-${user.id}`;
-        await db.execute(
+        const affected = await db.execute(
           `INSERT INTO savings_challenge (id, salary, start_month, completed_months, updated_at, user_id)
            VALUES (?, ?, ?, ?, ?, ?)
            ON CONFLICT (id) DO UPDATE SET
@@ -160,13 +174,18 @@ export async function POST(req: Request) {
             user.id,
           ]
         );
+        if (affected) restored += 1;
+        else skipped += 1;
       }
     }
 
     // 3. Restore Couples Goals
     if (data.couples_goals && Array.isArray(data.couples_goals)) {
       for (const g of data.couples_goals) {
-        await db.execute(
+        if (!g || !Number.isInteger(Number(g.id)) || typeof g.invite_code !== "string" || !g.invite_code) { skipped += 1; continue; }
+        const conflictingGoals = await db.query<{ user_id: number | null }>("SELECT user_id FROM couples_goals WHERE id = ? OR invite_code = ?", [g.id, g.invite_code]);
+        if (conflictingGoals.some((goal) => goal.user_id !== user.id && !(goal.user_id === null && user.id === 1))) { skipped += 1; continue; }
+        const affected = await db.execute(
           `INSERT INTO couples_goals (id, title, category, target_amount, current_amount, target_date, invite_code, partner_name, creator_name, status, created_at, user_id)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT (id) DO UPDATE SET
@@ -190,13 +209,15 @@ export async function POST(req: Request) {
             user.id,
           ]
         );
+        if (affected) restored += 1;
+        else skipped += 1;
       }
     }
 
     // 4. Restore Couples Contributions
     if (data.couples_contributions && Array.isArray(data.couples_contributions)) {
       for (const cc of data.couples_contributions) {
-        await db.execute(
+        const affected = await db.execute(
           `INSERT INTO couples_contributions (id, goal_id, contributor_name, amount, note, date, created_at)
            SELECT ?, cg.id, ?, ?, ?, ?, ? FROM couples_goals cg WHERE cg.id = ? AND cg.user_id = ?
            ON CONFLICT (id) DO NOTHING`,
@@ -212,13 +233,15 @@ export async function POST(req: Request) {
             user.id,
           ]
         );
+        if (affected) restored += 1;
+        else skipped += 1;
       }
     }
 
     // 5. Restore Friend Streaks
     if (data.friend_streaks && Array.isArray(data.friend_streaks)) {
       for (const f of data.friend_streaks) {
-        await db.execute(
+        const affected = await db.execute(
           `INSERT INTO friend_streaks (user_id, friend_code, friend_name, streak_type)
            VALUES (?, ?, ?, 'control_al_pedo')
            ON CONFLICT (user_id, friend_code) DO UPDATE SET
@@ -229,6 +252,8 @@ export async function POST(req: Request) {
             f.friend_name,
           ]
         );
+        if (affected) restored += 1;
+        else skipped += 1;
       }
     }
 
@@ -250,8 +275,8 @@ export async function POST(req: Request) {
           !Number.isFinite(interestRate) || interestRate < 0 || interestRate > 200 ||
           !Number.isFinite(totalPayment) || totalPayment < amount || totalPayment > 9_999_999_999_999 ||
           Math.abs(totalPayment - monthlyPayment * installments) > 1
-        ) continue;
-        await db.execute(
+        ) { skipped += 1; continue; }
+        const affected = await db.execute(
           `INSERT INTO loan_simulations (id, user_id, title, amount, installments, monthly_payment, interest_rate, total_payment, notes, created_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT (id) DO UPDATE SET
@@ -276,10 +301,12 @@ export async function POST(req: Request) {
             simulation.created_at || new Date().toISOString(),
           ]
         );
+        if (affected) restored += 1;
+        else skipped += 1;
       }
     }
 
-    return NextResponse.json({ success: true, count: backupTransactions.length });
+    return NextResponse.json({ success: true, restored, skipped, remapped });
     });
   } catch (err) {
     console.error("Backup import error:", err);
