@@ -2,7 +2,8 @@
 
 import React, { useState } from "react";
 import { FinancialMetrics } from "@/lib/finance-engine";
-import { PieChart, Sparkles } from "lucide-react";
+import { PieChart, TrendingUp } from "lucide-react";
+import FinanceIcon, { type FinanceIconName } from "@/components/FinanceIcon";
 
 interface ExpenseDonutChartProps {
   metrics: FinancialMetrics;
@@ -18,7 +19,7 @@ interface Segment {
   hoverColor: string;
   textColor: string;
   bgLight: string;
-  icon: string;
+  icon: FinanceIconName;
 }
 
 export default function ExpenseDonutChart({
@@ -47,7 +48,7 @@ export default function ExpenseDonutChart({
       hoverColor: "#94a3b8", // slate-400
       textColor: "text-slate-300",
       bgLight: "bg-slate-800/80 border-slate-700",
-      icon: "🏠",
+      icon: "home",
     },
     {
       key: "variable",
@@ -58,7 +59,7 @@ export default function ExpenseDonutChart({
       hoverColor: "#fbbf24", // amber-400
       textColor: "text-amber-400",
       bgLight: "bg-amber-950/40 border-amber-800/50",
-      icon: "🛒",
+      icon: "cart",
     },
     {
       key: "al_pedo",
@@ -69,7 +70,7 @@ export default function ExpenseDonutChart({
       hoverColor: "#fb923c", // orange-400
       textColor: "text-orange-400",
       bgLight: "bg-orange-950/40 border-orange-800/50",
-      icon: "🔥",
+      icon: "flame",
     },
     {
       key: "ahorro",
@@ -80,7 +81,7 @@ export default function ExpenseDonutChart({
       hoverColor: "#34d399", // emerald-400
       textColor: "text-emerald-400",
       bgLight: "bg-emerald-950/40 border-emerald-800/50",
-      icon: "🌱",
+      icon: "piggyBank",
     },
   ];
 
@@ -203,7 +204,7 @@ export default function ExpenseDonutChart({
             <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none px-2 max-w-[125px] mx-auto">
               {activeSegment ? (
                 <>
-                  <span className="text-base">{activeSegment.icon}</span>
+                  <FinanceIcon name={activeSegment.icon} className={`h-4 w-4 ${activeSegment.textColor}`} />
                   <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-0.5 truncate max-w-[110px]">
                     {activeSegment.shortLabel}
                   </span>
@@ -220,7 +221,7 @@ export default function ExpenseDonutChart({
                 <>
                   {metrics.netSavings >= 0 ? (
                     <>
-                      <Sparkles className="h-4 w-4 text-emerald-400 mb-0.5 animate-pulse" />
+                      <TrendingUp className="h-4 w-4 text-emerald-400 mb-0.5" />
                       <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                         Ahorro Real
                       </span>
@@ -233,7 +234,7 @@ export default function ExpenseDonutChart({
                     </>
                   ) : (
                     <>
-                      <span className="text-sm">⚠️</span>
+                      <span aria-hidden="true" className="text-rose-500"><FinanceIcon name="alert" /></span>
                       <span className="text-[10px] font-bold uppercase tracking-wider text-rose-400">
                         Déficit
                       </span>
@@ -290,7 +291,7 @@ export default function ExpenseDonutChart({
                       <span className="text-xs font-bold text-white">
                         {seg.label}
                       </span>
-                      <span className="text-xs">{seg.icon}</span>
+                      <FinanceIcon name={seg.icon} className={`h-3.5 w-3.5 ${seg.textColor}`} />
                     </div>
                     <div className="text-[10px] text-slate-400">
                       {seg.amount > 0 ? (

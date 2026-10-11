@@ -11,10 +11,10 @@ import {
   LogIn,
   Mail,
   User,
-  Sparkles,
   CheckCircle2,
 } from "lucide-react";
 import { triggerHaptic } from "@/lib/haptics";
+import FinanceIcon from "@/components/FinanceIcon";
 
 interface PinModalProps {
   isConfigured: boolean;
@@ -50,7 +50,7 @@ export default function PinModal({ isConfigured, onAuthenticated }: PinModalProp
     setError(null);
     setLoading(true);
     try {
-      const payload: any = {
+      const payload: { action: string; pin: string; email?: string } = {
         action: "login",
         pin: pinToTest,
       };
@@ -193,7 +193,7 @@ export default function PinModal({ isConfigured, onAuthenticated }: PinModalProp
         {/* Logo and Header */}
         <div className="text-center">
           <div className="mx-auto mb-2.5 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-tr from-[#104BC9] to-[#1656DB] text-white shadow-md shadow-blue-600/25">
-            <span className="text-2xl">🧉</span>
+            <FinanceIcon name="brand" className="h-6 w-6 text-white" />
           </div>
           <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center justify-center gap-1.5">
             <span>alpedo</span>
@@ -237,7 +237,7 @@ export default function PinModal({ isConfigured, onAuthenticated }: PinModalProp
             }`}
           >
             <UserPlus className="h-3.5 w-3.5" />
-            <span>Registrarse ✨</span>
+            <span>Registrarse</span>
           </button>
         </div>
 
@@ -367,7 +367,7 @@ export default function PinModal({ isConfigured, onAuthenticated }: PinModalProp
                 onClick={handleDemoLogin}
                 className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50/80 px-3 py-1 text-[11px] font-black text-[#1656DB] hover:bg-blue-100 active:scale-95 transition"
               >
-                <span>⚡ Entrar como Demo (PIN 1234)</span>
+                <span className="inline-flex items-center gap-1.5"><FinanceIcon name="zap" className="h-3.5 w-3.5" /> Entrar como demo (PIN 1234)</span>
               </button>
             </div>
           </form>
@@ -445,7 +445,7 @@ export default function PinModal({ isConfigured, onAuthenticated }: PinModalProp
             </div>
 
             <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-2 text-[10px] text-blue-900 font-semibold flex items-center gap-1.5">
-              <Sparkles className="h-3.5 w-3.5 text-[#1656DB] shrink-0" />
+              <ShieldCheck className="h-3.5 w-3.5 text-[#1656DB] shrink-0" />
               <span>Tus movimientos y saldo estarán 100% aislados en tu propia cuenta.</span>
             </div>
 

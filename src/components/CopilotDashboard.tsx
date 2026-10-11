@@ -11,11 +11,12 @@ import {
   Plus,
   ArrowUpRight,
   Calendar,
-  Sparkles,
+  BookOpen,
   CreditCard,
   Flame,
   CheckCircle2,
   TrendingUp,
+  TrendingDown,
   Info,
   Clock,
   ArrowRight,
@@ -30,6 +31,11 @@ import {
   Gauge,
 } from "lucide-react";
 import { triggerHaptic } from "@/lib/haptics";
+import FinanceIcon from "@/components/FinanceIcon";
+import {
+  formatParaguayMonthLabel,
+  getParaguayDateString,
+} from "@/lib/date-utils";
 
 export interface MonthlyHistoryItem {
   month: string;
@@ -56,7 +62,7 @@ interface CopilotDashboardProps {
   onUpdateAccount?: (bank: string, type: string, last4: string, baseBalance: number) => Promise<void>;
   onSelectMonth?: (month: string) => void;
   onAddNew: () => void;
-  onAddNewWithPreset?: (preset: { description: string; amount: number; category: "fijo" | "variable" | "pasivo" | "al_pedo" }) => void;
+  onAddNewWithPreset?: (preset: { description: string; amount: number; category: "fijo" | "variable" | "pasivo" | "al_pedo"; isRecurring?: boolean }) => void;
   onEditTransaction: (tx: Transaction) => void;
   onOpenCuero: () => void;
   onOpenTransactions: (filter?: string) => void;
@@ -106,10 +112,11 @@ export default function CopilotDashboard({
   const [isSavingAccount, setIsSavingAccount] = useState(false);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
+    const timer = window.setTimeout(() => {
       const stored = localStorage.getItem(`reviewed_month_${selectedMonth}`);
       setReviewed(stored === "true");
-    }
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [selectedMonth]);
 
   const handleToggleReviewed = () => {
@@ -118,6 +125,19 @@ export default function CopilotDashboard({
     if (typeof window !== "undefined") {
       localStorage.setItem(`reviewed_month_${selectedMonth}`, next ? "true" : "false");
     }
+  };
+
+  const handleAddRecurring = () => {
+    if (onAddNewWithPreset) {
+      onAddNewWithPreset({
+        description: "",
+        amount: 0,
+        category: "fijo",
+        isRecurring: true,
+      });
+      return;
+    }
+    onAddNew();
   };
 
   const formatMoney = (val: number) => {
@@ -130,6 +150,7 @@ export default function CopilotDashboard({
   const leftToSpend = Math.max(0, metrics.totalIncome - metrics.totalExpenses);
   const totalBudgeted = metrics.totalIncome > 0 ? metrics.totalIncome : 3000000;
   const isUnderBudget = metrics.netSavings >= 0;
+  const [paraguayYear, paraguayMonth, paraguayDay] = getParaguayDateString().split("-").map(Number);
 
   // Transactions to review (first 3 recent expenses)
   const recentExpenses = useMemo(() => {
@@ -142,8 +163,8 @@ export default function CopilotDashboard({
   const { pathD, areaD, currentPoint, daysInMonth, dailyTotals, lastActiveDay } = useMemo(() => {
     // Determine days in current selected month
     const parts = selectedMonth.split("-");
-    const year = parseInt(parts[0], 10) || new Date().getFullYear();
-    const monthIndex = (parseInt(parts[1], 10) || (new Date().getMonth() + 1)) - 1;
+    const year = parseInt(parts[0], 10) || paraguayYear;
+    const monthIndex = (parseInt(parts[1], 10) || paraguayMonth) - 1;
     const numDays = new Date(year, monthIndex + 1, 0).getDate();
 
     // Map daily expenses
@@ -160,10 +181,8 @@ export default function CopilotDashboard({
     });
 
     // Find the latest day with transactions or today's day if current month
-    const now = new Date();
-    const isCurrentMonth =
-      now.getFullYear() === year && now.getMonth() === monthIndex;
-    const todayDay = now.getDate();
+    const isCurrentMonth = paraguayYear === year && paraguayMonth - 1 === monthIndex;
+    const todayDay = paraguayDay;
     
     let maxTxDay = 1;
     for (let d = 1; d <= numDays; d++) {
@@ -210,14 +229,14 @@ export default function CopilotDashboard({
       dailyTotals: dayExpenses,
       lastActiveDay: activeDay,
     };
-  }, [transactions, selectedMonth, totalBudgeted]);
+  }, [transactions, selectedMonth, totalBudgeted, paraguayYear, paraguayMonth, paraguayDay]);
 
   // 12-Month Bar Chart Data (Image 2 style)
   const currentYear = useMemo(() => {
     return selectedMonth && selectedMonth !== "all"
       ? selectedMonth.substring(0, 4)
-      : String(new Date().getFullYear());
-  }, [selectedMonth]);
+      : String(paraguayYear);
+  }, [selectedMonth, paraguayYear]);
 
   const monthLabels = ["E", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
   const monthFullNames = [
@@ -298,31 +317,47 @@ export default function CopilotDashboard({
     });
 
     return {
-      transport: transport || 45000,
-      health: health || 22000,
-      services: services || 53000,
+      transport,
+      health,
+      services,
     };
   }, [transactions]);
 
   // Timeframe Net Flow Calculations (Patrimonio & Cuentas)
   const { timeframeNetSavings, timeframeMargin, timeframeLabel } = useMemo(() => {
+    const activeMonth = selectedMonth === "all"
+      ? `${paraguayYear}-${String(paraguayMonth).padStart(2, "0")}`
+      : selectedMonth;
+    const monthParts = activeMonth.split("-").map(Number);
+    const selectedYear = monthParts[0] || paraguayYear;
+    const selectedMonthIndex = (monthParts[1] || paraguayMonth) - 1;
+    const isCurrentMonth = selectedYear === paraguayYear && selectedMonthIndex === paraguayMonth - 1;
+    const selectedMonthEndDay = isCurrentMonth
+      ? paraguayDay
+      : new Date(Date.UTC(selectedYear, selectedMonthIndex + 1, 0)).getUTCDate();
+    const selectedMonthEnd = `${selectedYear}-${String(selectedMonthIndex + 1).padStart(2, "0")}-${String(selectedMonthEndDay).padStart(2, "0")}`;
+    const trailingMonthStart = (monthsBack: number) => {
+      const date = new Date(Date.UTC(selectedYear, selectedMonthIndex - monthsBack, 1));
+      return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+    };
+
     if (timeframe === "1W") {
-      // Last 7 days
-      const now = new Date();
-      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      const sevenDaysStr = sevenDaysAgo.toISOString().split("T")[0];
+      // Last 7 days within the selected month (or through today for the current month).
+      const endDate = new Date(`${selectedMonthEnd}T00:00:00Z`);
+      endDate.setUTCDate(endDate.getUTCDate() - 6);
+      const sevenDaysStr = endDate.toISOString().slice(0, 10);
       
       let inc = 0;
       let exp = 0;
       transactions.forEach((t) => {
-        if (t.date >= sevenDaysStr) {
+        if (t.date >= sevenDaysStr && t.date <= selectedMonthEnd) {
           if (t.type === "income") inc += t.amount;
           if (t.type === "expense") exp += t.amount;
         }
       });
       const net = inc - exp;
       const margin = inc > 0 ? (net / inc) * 100 : 0;
-      return { timeframeNetSavings: net, timeframeMargin: margin, timeframeLabel: "última semana" };
+      return { timeframeNetSavings: net, timeframeMargin: margin, timeframeLabel: "7 días" };
     }
 
     if (timeframe === "1M") {
@@ -334,8 +369,8 @@ export default function CopilotDashboard({
     }
 
     if (timeframe === "3M") {
-      // Last 3 months from monthlyHistory
-      const recent3 = monthlyHistory.slice(-3);
+      const startMonth = trailingMonthStart(2);
+      const recent3 = monthlyHistory.filter((h) => h.month >= startMonth && h.month <= activeMonth);
       const inc = recent3.reduce((acc, h) => acc + Number(h.total_income || 0), 0);
       const exp = recent3.reduce((acc, h) => acc + Number(h.total_expenses || 0), 0);
       const net = inc - exp;
@@ -344,31 +379,33 @@ export default function CopilotDashboard({
     }
 
     if (timeframe === "YTD" || timeframe === "1Y") {
-      const inc = monthlyHistory.reduce((acc, h) => acc + Number(h.total_income || 0), 0);
-      const exp = monthlyHistory.reduce((acc, h) => acc + Number(h.total_expenses || 0), 0);
+      const startMonth = timeframe === "YTD" ? `${selectedYear}-01` : trailingMonthStart(11);
+      const periodHistory = monthlyHistory.filter((h) => h.month >= startMonth && h.month <= activeMonth);
+      const inc = periodHistory.reduce((acc, h) => acc + Number(h.total_income || 0), 0);
+      const exp = periodHistory.reduce((acc, h) => acc + Number(h.total_expenses || 0), 0);
       const net = inc - exp;
       const margin = inc > 0 ? (net / inc) * 100 : 0;
       return {
         timeframeNetSavings: net,
         timeframeMargin: margin,
-        timeframeLabel: timeframe === "YTD" ? "en el año" : "en 12 meses",
+        timeframeLabel: timeframe === "YTD" ? "este año" : "12 meses",
       };
     }
 
     return { timeframeNetSavings: metrics.netSavings, timeframeMargin: metrics.savingsRate, timeframeLabel: "este mes" };
-  }, [timeframe, transactions, metrics, monthlyHistory]);
+  }, [timeframe, transactions, metrics, monthlyHistory, selectedMonth, paraguayYear, paraguayMonth, paraguayDay]);
 
   const estimatedNetWorth =
-    (accountBaseBalance || 0) + timeframeNetSavings + emergencyFundSaved;
+    (accountBaseBalance || 0) + metrics.netSavings + emergencyFundSaved;
 
   // Upcoming recurring expenses computed dynamically
   const upcomingBills = useMemo(() => {
-    const today = new Date().getDate();
+    const today = Number(getParaguayDateString().split("-")[2]);
     return recurringExpenses
       .filter((t) => t.type === "expense")
       .map((t) => {
         const day = parseInt(t.date.split("-")[2], 10) || 1;
-        let daysLeft = day - today;
+        const daysLeft = day - today;
         let status = "";
         let isPast = false;
 
@@ -413,13 +450,12 @@ export default function CopilotDashboard({
   // Spending Pace / Velocity Calculation (e.g. YNAB / Copilot / Spendee)
   const spendingPace = useMemo(() => {
     const parts = selectedMonth.split("-");
-    const year = parseInt(parts[0], 10) || new Date().getFullYear();
-    const monthIndex = (parseInt(parts[1], 10) || new Date().getMonth() + 1) - 1;
+    const year = parseInt(parts[0], 10) || paraguayYear;
+    const monthIndex = (parseInt(parts[1], 10) || paraguayMonth) - 1;
     const totalDays = new Date(year, monthIndex + 1, 0).getDate();
 
-    const now = new Date();
-    const isCurrent = now.getFullYear() === year && now.getMonth() === monthIndex;
-    const currentDay = isCurrent ? Math.min(totalDays, Math.max(1, now.getDate())) : totalDays;
+    const isCurrent = paraguayYear === year && paraguayMonth - 1 === monthIndex;
+    const currentDay = isCurrent ? Math.min(totalDays, Math.max(1, paraguayDay)) : totalDays;
 
     const monthElapsedPercent = Math.round((currentDay / totalDays) * 100);
     const budgetTotal = totalBudgeted > 0 ? totalBudgeted : 3000000;
@@ -439,13 +475,13 @@ export default function CopilotDashboard({
 
     if (diff < -50000) {
       status = "optimo";
-      message = `Estás gastando a un ritmo excelente (-${currencySymbol} ${formatMoney(Math.abs(diff))} bajo lo proyectado).`;
+      message = `Vas ${currencySymbol} ${formatMoney(Math.abs(diff))} por debajo de lo previsto.`;
     } else if (diff <= 50000) {
       status = "al_limite";
-      message = `Tu ritmo va sincronizado con los días del mes. Vas al día.`;
+      message = "Vas al ritmo previsto para este día del mes.";
     } else {
       status = "acelerado";
-      message = `¡Cuidado! Vas consumiendo presupuesto más rápido de lo esperado (+${currencySymbol} ${formatMoney(diff)} sobre el ritmo ideal).`;
+      message = `Gastaste ${currencySymbol} ${formatMoney(diff)} más de lo previsto para hoy.`;
     }
 
     return {
@@ -459,18 +495,18 @@ export default function CopilotDashboard({
       status,
       message,
     };
-  }, [selectedMonth, metrics, totalBudgeted, currencySymbol, privacyMode]);
+  }, [selectedMonth, metrics, totalBudgeted, currencySymbol, privacyMode, paraguayYear, paraguayMonth, paraguayDay]);
 
   const handleShareScorecard = async () => {
     triggerHaptic("medium");
-    const monthName = selectedMonth === "all" ? "Histórico Total" : selectedMonth;
-    const text = `📊 Mi Cierre Financiero (${monthName}) - alpedo.app\n` +
-      `💰 Ingresos: ${currencySymbol} ${formatMoney(metrics.totalIncome)}\n` +
-      `💸 Gastos Totales: ${currencySymbol} ${formatMoney(metrics.totalExpenses)}\n` +
-      `🛡️ Ahorro Neto: ${currencySymbol} ${formatMoney(metrics.netSavings)}\n` +
-      `🔥 Gastos Al Pedo: ${currencySymbol} ${formatMoney(metrics.expenses.al_pedo)}\n` +
-      `🎯 Puntuación de Salud: ${metrics.health.score}/100\n` +
-      `💪 ¡Controlando mis finanzas con alpedo.app! 🧉🇵🇾`;
+    const monthName = selectedMonth === "all" ? "Histórico Total" : formatParaguayMonthLabel(selectedMonth);
+    const text = `Mi cierre financiero (${monthName}) · alpedo.app\n` +
+      `Ingresos: ${currencySymbol} ${formatMoney(metrics.totalIncome)}\n` +
+      `Gastos totales: ${currencySymbol} ${formatMoney(metrics.totalExpenses)}\n` +
+      `Ahorro neto: ${currencySymbol} ${formatMoney(metrics.netSavings)}\n` +
+      `Gastos Al Pedo: ${currencySymbol} ${formatMoney(metrics.expenses.al_pedo)}\n` +
+      `Salud financiera: ${metrics.health.score}/100\n` +
+      `Controlando mis finanzas con alpedo.app`;
 
     if (typeof navigator !== "undefined" && navigator.share) {
       try {
@@ -492,16 +528,16 @@ export default function CopilotDashboard({
   };
 
   return (
-    <div className="space-y-5 pb-8">
+      <div className="space-y-4 pb-8 sm:space-y-5">
       {/* 1. COPILOT HERO CARD: "₲ 287.000 restante de ₲ 1.095.000 presupuestado este mes" (Reference Image 1) */}
-      <div id="tour-hero-card" className="relative rounded-[28px] sm:rounded-[32px] bg-white p-5 sm:p-6 shadow-[0_8px_30px_rgb(0,0,0,0.06)] border border-slate-100/90 overflow-hidden">
+      <div id="tour-hero-card" className="relative rounded-[26px] sm:rounded-[32px] bg-white p-4 sm:p-6 shadow-[0_8px_30px_rgb(0,0,0,0.06)] border border-slate-100/90 overflow-hidden">
 
         {/* Top Info Header */}
         <div className="flex items-start justify-between">
           <div className="w-full text-center">
-            <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight flex items-baseline justify-center gap-2">
+            <h2 className="text-[clamp(1.45rem,7.7vw,1.875rem)] sm:text-4xl font-extrabold text-slate-900 tracking-tight flex items-baseline justify-center gap-1 sm:gap-2">
               <span>{currencySymbol} {formatMoney(leftToSpend)}</span>
-              <span className="text-xl sm:text-2xl font-bold text-slate-600">restante</span>
+              <span className="text-lg sm:text-2xl font-bold text-slate-600">restante</span>
             </h2>
             <p className="text-xs sm:text-sm font-semibold text-slate-400 mt-1">
               de {currencySymbol} {formatMoney(totalBudgeted)} presupuestado este mes
@@ -516,8 +552,13 @@ export default function CopilotDashboard({
           </button>
         </div>
 
-        {/* Dynamic Sparkline Chart with Real Node Tooltip Badge (Image 1 style) */}
-        <div className="relative mt-6 h-36 w-full">
+        <div className="mt-3 flex items-center justify-center gap-4 text-[10px] font-semibold text-slate-500" aria-label="Leyenda del gráfico">
+          <span className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="h-0.5 w-3 rounded-full bg-emerald-500" />Gasto real</span>
+          <span className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="w-3 border-t border-dashed border-slate-400" />Ritmo ideal</span>
+        </div>
+
+        {/* Gasto acumulado frente al ritmo ideal */}
+        <div className="relative mt-1 h-28 w-full sm:h-36">
           {/* Badge Tooltip pinned dynamically to the active point on the trajectory curve */}
           <div
             className="absolute z-10 flex flex-col items-center pointer-events-none transition-all duration-300"
@@ -535,11 +576,7 @@ export default function CopilotDashboard({
                   : "bg-red-500 text-white shadow-red-500/25"
               }`}
             >
-              <span>
-                {isUnderBudget
-                  ? `+${currencySymbol} ${formatMoney(metrics.netSavings)} a favor`
-                  : `-${currencySymbol} ${formatMoney(Math.abs(metrics.netSavings))} excedido`}
-              </span>
+              <span>{currencySymbol} {formatMoney(currentPoint.cumulative)} gastado</span>
             </div>
             <div
               className={`h-2.5 w-0.5 ${
@@ -559,6 +596,8 @@ export default function CopilotDashboard({
             className="h-full w-full overflow-visible"
             viewBox="0 0 400 130"
             preserveAspectRatio="none"
+            role="img"
+            aria-label={`Gasto acumulado ${currencySymbol} ${formatMoney(currentPoint.cumulative)} comparado con el ritmo ideal`}
           >
             <defs>
               <linearGradient id="copilotGradient" x1="0" y1="0" x2="0" y2="1">
@@ -600,12 +639,12 @@ export default function CopilotDashboard({
         </div>
 
         {/* Quick Health Summary Pill Tags (Image 1 footer) */}
-        <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between text-[11px] sm:text-xs">
+        <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[10px] sm:text-xs">
           <div className="flex items-center gap-1.5 font-bold text-slate-700">
             <span
               className={`flex h-2 w-2 rounded-full ${
                 metrics.health.score >= 80
-                  ? "bg-emerald-500 animate-pulse"
+                  ? "bg-emerald-500"
                   : metrics.health.score >= 50
                   ? "bg-amber-500"
                   : "bg-red-500"
@@ -661,7 +700,7 @@ export default function CopilotDashboard({
             </div>
             <div>
               <h3 className="text-xs font-black text-slate-900 tracking-tight">
-                Ritmo de Gasto Mensual
+                Ritmo del mes
               </h3>
               <p className="text-[10px] text-slate-500 font-semibold">
                 Día {spendingPace.currentDay} de {spendingPace.totalDays} ({spendingPace.monthElapsedPercent}% del mes)
@@ -675,9 +714,10 @@ export default function CopilotDashboard({
               ? "bg-emerald-100 text-emerald-800"
               : spendingPace.status === "al_limite"
               ? "bg-amber-100 text-amber-800"
-              : "bg-rose-100 text-rose-800 animate-pulse"
+              : "bg-rose-100 text-rose-800"
           }`}>
-            {spendingPace.status === "optimo" ? "Ritmo Óptimo 🟢" : spendingPace.status === "al_limite" ? "Al Límite 🟡" : "Acelerado 🔴"}
+            <span aria-hidden="true" className={`mr-1 inline-block h-1.5 w-1.5 rounded-full ${spendingPace.status === "optimo" ? "bg-emerald-500" : spendingPace.status === "al_limite" ? "bg-amber-500" : "bg-rose-500"}`} />
+            {spendingPace.status === "optimo" ? "Ritmo Óptimo" : spendingPace.status === "al_limite" ? "Al Límite" : "Acelerado"}
           </span>
         </div>
 
@@ -685,7 +725,7 @@ export default function CopilotDashboard({
         <div className="space-y-2 mb-3">
           <div>
             <div className="flex justify-between text-[10px] font-bold text-slate-400 mb-1">
-              <span>Tiempo del mes transcurrido</span>
+              <span>Mes transcurrido</span>
               <span className="font-mono text-slate-600">{spendingPace.monthElapsedPercent}%</span>
             </div>
             <div className="h-2 w-full rounded-full bg-slate-100 overflow-hidden">
@@ -726,17 +766,6 @@ export default function CopilotDashboard({
           {spendingPace.message}
         </p>
 
-        {/* Quick Tools Row: WhatsApp Share Scorecard */}
-        <div className="pt-2 border-t border-slate-100">
-          <button
-            type="button"
-            onClick={handleShareScorecard}
-            className="w-full h-9 rounded-xl bg-slate-50 border border-slate-200/90 px-3 flex items-center justify-center gap-1.5 text-[11px] font-black text-slate-700 hover:bg-slate-100 active:scale-95 transition"
-          >
-            <Share2 className="h-3.5 w-3.5 text-emerald-600" />
-            <span>{copiedShare ? "¡Copiado a WhatsApp! ✅" : "Compartir Resumen del Mes"}</span>
-          </button>
-        </div>
       </div>
 
       {/* 1.5 NATIVE MOBILE SPEED DIAL: 1-Tap Daily Paraguayan Spends Carousel */}
@@ -762,7 +791,7 @@ export default function CopilotDashboard({
             }}
             className="flex items-center gap-2 rounded-2xl bg-white border border-slate-200/80 px-3.5 py-2.5 shadow-sm hover:border-blue-400 hover:shadow-md transition active:scale-95 shrink-0 group"
           >
-            <span className="text-base group-hover:scale-110 transition-transform">🚗</span>
+            <FinanceIcon name="car" className="h-4 w-4 text-slate-600 transition-transform group-hover:scale-110" />
             <div className="text-left">
               <div className="text-xs font-black text-slate-900 leading-none">Bolt</div>
               <div className="text-[10px] font-mono font-bold text-slate-400 mt-0.5">{currencySymbol} 25.000</div>
@@ -780,7 +809,7 @@ export default function CopilotDashboard({
             }}
             className="flex items-center gap-2 rounded-2xl bg-white border border-slate-200/80 px-3.5 py-2.5 shadow-sm hover:border-emerald-400 hover:shadow-md transition active:scale-95 shrink-0 group"
           >
-            <span className="text-base group-hover:scale-110 transition-transform">🛒</span>
+            <FinanceIcon name="cart" className="h-4 w-4 text-slate-600 transition-transform group-hover:scale-110" />
             <div className="text-left">
               <div className="text-xs font-black text-slate-900 leading-none">Biggie</div>
               <div className="text-[10px] font-mono font-bold text-slate-400 mt-0.5">{currencySymbol} 45.000</div>
@@ -798,7 +827,7 @@ export default function CopilotDashboard({
             }}
             className="flex items-center gap-2 rounded-2xl bg-white border border-orange-200/80 bg-orange-50/20 px-3.5 py-2.5 shadow-sm hover:border-orange-400 hover:shadow-md transition active:scale-95 shrink-0 group"
           >
-            <span className="text-base group-hover:scale-110 transition-transform">🥪</span>
+            <FinanceIcon name="utensils" className="h-4 w-4 text-orange-600 transition-transform group-hover:scale-110" />
             <div className="text-left">
               <div className="text-xs font-black text-orange-950 leading-none flex items-center gap-1">
                 Lomito
@@ -819,7 +848,7 @@ export default function CopilotDashboard({
             }}
             className="flex items-center gap-2 rounded-2xl bg-white border border-slate-200/80 px-3.5 py-2.5 shadow-sm hover:border-amber-400 hover:shadow-md transition active:scale-95 shrink-0 group"
           >
-            <span className="text-base group-hover:scale-110 transition-transform">☕</span>
+            <FinanceIcon name="coffee" className="h-4 w-4 text-amber-700 transition-transform group-hover:scale-110" />
             <div className="text-left">
               <div className="text-xs font-black text-slate-900 leading-none">Café</div>
               <div className="text-[10px] font-mono font-bold text-slate-400 mt-0.5">{currencySymbol} 15.000</div>
@@ -837,7 +866,7 @@ export default function CopilotDashboard({
             }}
             className="flex items-center gap-2 rounded-2xl bg-white border border-slate-200/80 px-3.5 py-2.5 shadow-sm hover:border-blue-400 hover:shadow-md transition active:scale-95 shrink-0 group"
           >
-            <span className="text-base group-hover:scale-110 transition-transform">⛽</span>
+            <FinanceIcon name="fuel" className="h-4 w-4 text-slate-600 transition-transform group-hover:scale-110" />
             <div className="text-left">
               <div className="text-xs font-black text-slate-900 leading-none">Nafta</div>
               <div className="text-[10px] font-mono font-bold text-slate-400 mt-0.5">{currencySymbol} 100.000</div>
@@ -853,7 +882,7 @@ export default function CopilotDashboard({
                 onAddNew();
               }
             }}
-            className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 text-white px-3.5 py-2.5 shadow-sm hover:opacity-95 transition active:scale-95 shrink-0 group"
+            className="flex min-h-11 items-center gap-2 rounded-2xl bg-orange-600 text-white px-3.5 py-2.5 shadow-sm hover:bg-orange-700 transition active:scale-95 shrink-0 group"
           >
             <Flame className="h-4 w-4" />
             <div className="text-left">
@@ -866,17 +895,28 @@ export default function CopilotDashboard({
 
       {/* 2. COPILOT "TO REVIEW" CARD: Recent Transactions to review */}
       <div className="space-y-2">
-        <div className="flex items-center justify-between px-1">
+        <div className="flex items-center justify-between gap-2 px-1">
           <h3 className="text-xs font-black tracking-wider text-slate-400 uppercase">
             PARA REVISAR
           </h3>
-          <button
-            onClick={() => onOpenTransactions()}
-            className="flex items-center gap-0.5 text-xs font-bold text-slate-400 hover:text-blue-600 transition"
-          >
-            <span>Ver todos</span>
-            <ChevronRight className="h-3.5 w-3.5" />
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleShareScorecard}
+              className="inline-flex min-h-10 items-center gap-1 rounded-lg px-1 text-[11px] font-bold text-slate-500 hover:text-blue-700 active:text-blue-800 transition"
+              aria-label={copiedShare ? "Resumen copiado" : "Compartir resumen del mes"}
+            >
+              {copiedShare ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Share2 className="h-3.5 w-3.5 text-emerald-600" />}
+              <span>{copiedShare ? "Copiado" : "Compartir"}</span>
+            </button>
+            <button
+              onClick={() => onOpenTransactions()}
+              className="flex min-h-10 items-center gap-0.5 text-xs font-bold text-slate-400 hover:text-blue-600 transition"
+            >
+              <span>Ver todos</span>
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
 
         <div className="rounded-[24px] bg-white p-4 sm:p-5 shadow-[0_2px_16px_rgba(0,0,0,0.04)] border border-slate-100">
@@ -922,7 +962,7 @@ export default function CopilotDashboard({
                             : "bg-blue-50 text-blue-600 border border-blue-200/60"
                         }`}
                       >
-                        {isAlPedo ? "🔥 AL PEDO" : "💼 VARIABLE"}
+                        <><FinanceIcon name={isAlPedo ? "flame" : "briefcase"} className="mr-1 h-3 w-3" />{isAlPedo ? "AL PEDO" : "VARIABLE"}</>
                       </span>
                       <div className="flex items-center gap-1">
                         <span className="text-xs sm:text-sm font-extrabold text-slate-900">
@@ -972,9 +1012,11 @@ export default function CopilotDashboard({
         {/* Horizontal scrolling ring gauges */}
         <div className="flex gap-4 overflow-x-auto no-scrollbar py-2 px-1">
           {/* Ring 1: Gastos Superfluos (Al Pedo) */}
-          <div
+          <button
+            type="button"
             onClick={() => onOpenTransactions("al_pedo")}
-            className="flex flex-col items-center shrink-0 w-20 text-center cursor-pointer group active:scale-95 transition"
+            aria-label="Ver movimientos de gastos Al Pedo"
+            className="flex flex-col items-center shrink-0 w-20 text-center cursor-pointer group active:scale-95 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-xl"
             title="Tocar para filtrar gastos Al Pedo"
           >
             <div className="relative flex h-14 w-14 items-center justify-center">
@@ -995,7 +1037,7 @@ export default function CopilotDashboard({
                   strokeLinecap="round"
                 />
               </svg>
-              <span className="absolute text-xl group-hover:scale-110 transition-transform">🛍️</span>
+              <FinanceIcon name="shopping" className="absolute h-5 w-5 text-red-500 transition-transform group-hover:scale-110" />
             </div>
             <span className="text-xs font-extrabold text-slate-900 mt-2">
               {currencySymbol} {formatMoney(metrics.expenses.al_pedo)}
@@ -1007,14 +1049,16 @@ export default function CopilotDashboard({
                   : "text-slate-400"
               }`}
             >
-              {metrics.expenses.al_pedo > budgetAlPedoLimit ? "excedido" : "restante"}
+              {metrics.expenses.al_pedo > budgetAlPedoLimit ? "excedido" : "gastado"}
             </span>
-          </div>
+          </button>
 
           {/* Ring 2: Gastos Fijos (Casa / Alquiler) */}
-          <div
+          <button
+            type="button"
             onClick={() => onOpenTransactions("fijo")}
-            className="flex flex-col items-center shrink-0 w-20 text-center cursor-pointer group active:scale-95 transition"
+            aria-label="Ver movimientos de gastos fijos"
+            className="flex flex-col items-center shrink-0 w-20 text-center cursor-pointer group active:scale-95 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-xl"
             title="Tocar para filtrar gastos fijos"
           >
             <div className="relative flex h-14 w-14 items-center justify-center">
@@ -1035,18 +1079,20 @@ export default function CopilotDashboard({
                   strokeLinecap="round"
                 />
               </svg>
-              <span className="absolute text-xl group-hover:scale-110 transition-transform">🏠</span>
+              <FinanceIcon name="home" className="absolute h-5 w-5 text-indigo-600 transition-transform group-hover:scale-110" />
             </div>
             <span className="text-xs font-extrabold text-slate-900 mt-2">
               {currencySymbol} {formatMoney(metrics.expenses.fijo)}
             </span>
-            <span className="text-[10px] font-bold text-slate-400">al día</span>
-          </div>
+            <span className="text-[10px] font-bold text-slate-400">gastado</span>
+          </button>
 
           {/* Ring 3: Gastos Variables (Comida & Super) */}
-          <div
+          <button
+            type="button"
             onClick={() => onOpenTransactions("variable")}
-            className="flex flex-col items-center shrink-0 w-20 text-center cursor-pointer group active:scale-95 transition"
+            aria-label="Ver movimientos de gastos variables"
+            className="flex flex-col items-center shrink-0 w-20 text-center cursor-pointer group active:scale-95 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-xl"
             title="Tocar para filtrar gastos variables"
           >
             <div className="relative flex h-14 w-14 items-center justify-center">
@@ -1067,20 +1113,16 @@ export default function CopilotDashboard({
                   strokeLinecap="round"
                 />
               </svg>
-              <span className="absolute text-xl group-hover:scale-110 transition-transform">🍔</span>
+              <FinanceIcon name="utensils" className="absolute h-5 w-5 text-amber-600 transition-transform group-hover:scale-110" />
             </div>
             <span className="text-xs font-extrabold text-slate-900 mt-2">
               {currencySymbol} {formatMoney(metrics.expenses.variable)}
             </span>
-            <span className="text-[10px] font-bold text-slate-400">restante</span>
-          </div>
+            <span className="text-[10px] font-bold text-slate-400">gastado</span>
+          </button>
 
           {/* Ring 4: Transporte & Nafta (Dynamic) */}
-          <div
-            onClick={() => onOpenTransactions()}
-            className="flex flex-col items-center shrink-0 w-20 text-center cursor-pointer group active:scale-95 transition"
-            title="Transporte y movilidad"
-          >
+          <div className="flex flex-col items-center shrink-0 w-20 text-center">
             <div className="relative flex h-14 w-14 items-center justify-center">
               <svg className="h-14 w-14 -rotate-90" viewBox="0 0 48 48">
                 <circle cx="24" cy="24" r="20" stroke="#DCFCE7" strokeWidth="4" fill="none" />
@@ -1096,20 +1138,16 @@ export default function CopilotDashboard({
                   strokeLinecap="round"
                 />
               </svg>
-              <span className="absolute text-xl group-hover:scale-110 transition-transform">🚗</span>
+              <FinanceIcon name="car" className="absolute h-5 w-5 text-emerald-600" />
             </div>
             <span className="text-xs font-extrabold text-slate-900 mt-2">
               {currencySymbol} {formatMoney(subcategoryTotals.transport)}
             </span>
-            <span className="text-[10px] font-bold text-slate-400">restante</span>
+            <span className="text-[10px] font-bold text-slate-400">gastado</span>
           </div>
 
           {/* Ring 5: Salud & Medicamentos (Dynamic) */}
-          <div
-            onClick={() => onOpenTransactions()}
-            className="flex flex-col items-center shrink-0 w-20 text-center cursor-pointer group active:scale-95 transition"
-            title="Farmacia y salud"
-          >
+          <div className="flex flex-col items-center shrink-0 w-20 text-center">
             <div className="relative flex h-14 w-14 items-center justify-center">
               <svg className="h-14 w-14 -rotate-90" viewBox="0 0 48 48">
                 <circle cx="24" cy="24" r="20" stroke="#FFE4E6" strokeWidth="4" fill="none" />
@@ -1125,20 +1163,16 @@ export default function CopilotDashboard({
                   strokeLinecap="round"
                 />
               </svg>
-              <span className="absolute text-xl group-hover:scale-110 transition-transform">💊</span>
+              <FinanceIcon name="pill" className="absolute h-5 w-5 text-rose-600" />
             </div>
             <span className="text-xs font-extrabold text-slate-900 mt-2">
               {currencySymbol} {formatMoney(subcategoryTotals.health)}
             </span>
-            <span className="text-[10px] font-bold text-slate-400">restante</span>
+            <span className="text-[10px] font-bold text-slate-400">gastado</span>
           </div>
 
           {/* Ring 6: Conectividad & Servicios (Dynamic) */}
-          <div
-            onClick={() => onOpenTransactions()}
-            className="flex flex-col items-center shrink-0 w-20 text-center cursor-pointer group active:scale-95 transition"
-            title="Servicios y conectividad"
-          >
+          <div className="flex flex-col items-center shrink-0 w-20 text-center">
             <div className="relative flex h-14 w-14 items-center justify-center">
               <svg className="h-14 w-14 -rotate-90" viewBox="0 0 48 48">
                 <circle cx="24" cy="24" r="20" stroke="#FEE2E2" strokeWidth="4" fill="none" />
@@ -1154,12 +1188,12 @@ export default function CopilotDashboard({
                   strokeLinecap="round"
                 />
               </svg>
-              <span className="absolute text-xl group-hover:scale-110 transition-transform">⚡</span>
+              <FinanceIcon name="zap" className="absolute h-5 w-5 text-violet-600" />
             </div>
             <span className="text-xs font-extrabold text-slate-900 mt-2">
               {currencySymbol} {formatMoney(subcategoryTotals.services)}
             </span>
-            <span className="text-[10px] font-bold text-slate-400">al día</span>
+            <span className="text-[10px] font-bold text-slate-400">gastado</span>
           </div>
         </div>
       </div>
@@ -1297,7 +1331,7 @@ export default function CopilotDashboard({
           {/* Row 2: Alquiler / Servicios Recurrentes */}
           <div className="text-center space-y-1 pt-2">
             <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-600">
-              🔑 ALQUILER & SERVICIOS
+              <span className="inline-flex items-center gap-1"><FinanceIcon name="home" className="h-3 w-3" /> Alquiler & servicios</span>
             </span>
             <div className="grid grid-cols-3 gap-2 text-center text-xs pt-1">
               <div>
@@ -1325,7 +1359,7 @@ export default function CopilotDashboard({
           {/* Row 3: Superfluos / Al Pedo */}
           <div className="text-center space-y-1 pt-2">
             <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-red-50 text-red-600">
-              🔥 GASTOS AL PEDO
+              <span className="inline-flex items-center gap-1"><FinanceIcon name="flame" className="h-3 w-3" /> Gastos Al Pedo</span>
             </span>
             <div className="grid grid-cols-3 gap-2 text-center text-xs pt-1">
               <div>
@@ -1393,10 +1427,14 @@ export default function CopilotDashboard({
                 timeframeMargin >= 0 ? "text-emerald-600" : "text-red-600"
               }`}
             >
-              <TrendingUp className="h-3.5 w-3.5" />
+              {timeframeMargin >= 0 ? (
+                <TrendingUp className="h-3.5 w-3.5" />
+              ) : (
+                <TrendingDown className="h-3.5 w-3.5" />
+              )}
               <span>
-                {timeframeMargin >= 0 ? "+" : ""}
-                {timeframeMargin.toFixed(1)}% margen {timeframeLabel}
+                {timeframeNetSavings >= 0 ? "+" : "−"}{currencySymbol} {formatMoney(Math.abs(timeframeNetSavings))}
+                <span className="font-semibold text-slate-400"> · {timeframeMargin.toFixed(1)}% · {timeframeLabel}</span>
               </span>
             </div>
           </div>
@@ -1468,7 +1506,7 @@ export default function CopilotDashboard({
             PRÓXIMOS PAGOS
           </h3>
           <button
-            onClick={() => onOpenTransactions("fijo")}
+            onClick={() => onOpenTransactions("recurring")}
             className="text-xs font-bold text-blue-600 hover:text-blue-800 transition"
           >
             Recurrentes ›
@@ -1479,7 +1517,7 @@ export default function CopilotDashboard({
           <div className="rounded-2xl bg-white p-4 text-center border border-slate-100 text-xs text-slate-400">
             No tenés servicios o pagos recurrentes registrados aún.
             <button
-              onClick={onAddNew}
+              onClick={handleAddRecurring}
               className="mt-2 block mx-auto text-blue-600 font-bold hover:underline"
             >
               + Agregar gasto recurrente
@@ -1500,7 +1538,7 @@ export default function CopilotDashboard({
                       bill.isPast
                         ? "bg-slate-100 text-slate-500"
                         : bill.daysLeft === 0
-                        ? "bg-amber-100 text-amber-700 font-black animate-pulse"
+                        ? "bg-amber-100 text-amber-700 font-black"
                         : "bg-blue-50 text-blue-700"
                     }`}
                   >
@@ -1521,17 +1559,17 @@ export default function CopilotDashboard({
       </div>
 
       {/* 7. KAPE COPILOT AI ASSISTANT CARD ("¿Me da el cuero?") */}
-      <div id="tour-cuero-card" className="rounded-[28px] bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900 p-5 text-white shadow-xl relative overflow-hidden">
+      <div id="tour-cuero-card" className="rounded-[28px] bg-[#174B9C] p-5 text-white shadow-md relative overflow-hidden">
         <div className="relative z-10 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 backdrop-blur-md text-2xl shadow-inner shrink-0">
-              🧉
+              <FinanceIcon name="brand" className="h-6 w-6 text-white" />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h4 className="text-sm font-black text-white">¿Me da el cuero?</h4>
                 <span className="rounded-full bg-emerald-400 px-2 py-0.5 text-[9px] font-black text-slate-950">
-                  IA COPILOT
+                  CONSEJO KAPE
                 </span>
               </div>
               <p className="text-[11px] text-blue-200 mt-0.5">
@@ -1684,8 +1722,8 @@ export default function CopilotDashboard({
                   }}
                   className="w-full py-2.5 rounded-full bg-blue-50 border border-blue-200 text-[#1656DB] text-xs font-black hover:bg-blue-100 transition flex items-center justify-center gap-1.5 active:scale-95"
                 >
-                  <Sparkles className="h-4 w-4" />
-                  <span>Ver Tour Completo de la App</span>
+                  <BookOpen className="h-4 w-4" />
+                  <span>Ver guía de la app</span>
                 </button>
               )}
               <button

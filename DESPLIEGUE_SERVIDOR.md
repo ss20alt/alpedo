@@ -1,141 +1,90 @@
-# 🚀 Guía de Despliegue en Servidor: alpedo.app
+# 🚀 Guía de Despliegue en Servidor: Finanzas Inteligentes
 
-Esta guía detalla los pasos para desplegar **alpedo.app** en un servidor privado (VPS en Oracle Cloud, DigitalOcean, Hetzner, AWS, Linode, etc.) utilizando **PostgreSQL**, **PM2** o **Docker**, junto con **Nginx** y certificado **SSL gratuito**.
-
----
-
-## 📋 Requisitos Previos en el Servidor
-
-1. **Sistema Operativo**: Ubuntu 22.04 LTS / 24.04 LTS o Debian 12.
-2. **Node.js**: Versión 20.x o 22.x LTS.
-3. **PostgreSQL**: Versión 15 o superior.
-4. **PM2**: Administrador de procesos en segundo plano.
-5. **Nginx o Caddy**: Servidor web y reverse proxy para SSL HTTPS.
+Esta guía te explica cómo ejecutar la aplicación localmente en tu computadora y cómo subirla a cualquier servidor privado (VPS en DigitalOcean, Hetzner, Linode, AWS, VPS local, etc.) utilizando Docker.
 
 ---
 
-## 🛠️ 1. Preparar el Servidor y Base de Datos
+## 💻 1. Probar la aplicación en tu computadora local
 
-### Instalar PostgreSQL
-```bash
-sudo apt update
-sudo apt install -y postgresql postgresql-contrib
+Podés correr el sistema de inmediato en tu máquina:
+
+```powershell
+# 1. Abrir terminal en la carpeta del proyecto
+cd C:\Users\acer\.gemini\antigravity\scratch\finanzas-inteligentes
+
+# 2. Iniciar en modo desarrollo
+npm run dev
 ```
 
-### Crear Base de Datos y Usuario
-```bash
-sudo -u postgres psql
-```
+Abrí tu navegador en: **`http://localhost:3000`**
 
-Dentro de la consola de PostgreSQL:
-```sql
-CREATE DATABASE alpedo_db;
-CREATE USER alpedo_user WITH ENCRYPTED PASSWORD 'TuPasswordSeguro2026!';
-GRANT ALL PRIVILEGES ON DATABASE alpedo_db TO alpedo_user;
-\c alpedo_db
-GRANT ALL ON SCHEMA public TO alpedo_user;
-\q
-```
-
-### Inicializar las Tablas
-```bash
-psql -U alpedo_user -d alpedo_db -h 127.0.0.1 -f init_schema.sql
-```
+- La primera vez te pedirá crear tu **PIN Maestro** (mínimo 4 caracteres/números).
+- Podés ir a la pestaña **Ajustes** y tocar **"Cargar Datos de Demostración"** para ver el semáforo y las métricas en acción de inmediato.
 
 ---
 
-## 📦 2. Despliegue con Node.js & PM2 (Método Nativo)
+## 🐳 2. Despliegue en Servidor con Docker (Recomendado)
 
-### 1. Clonar el repositorio
-```bash
-cd /home/ubuntu
-git clone https://github.com/ss20alt/alpedo.git finanzas-inteligentes
-cd finanzas-inteligentes
-```
+Esta es la forma más limpia y portátil de alojarlo en tu servidor. Toda la base de datos queda guardada en la carpeta `./data` de tu servidor.
 
-### 2. Configurar Variables de Entorno (`.env.local`)
-```bash
-cp .env.example .env.local
-nano .env.local
-```
-Configura:
-```env
-DATABASE_URL=postgresql://alpedo_user:TuPasswordSeguro2026!@127.0.0.1:5432/alpedo_db
-GEMINI_API_KEY=tu_api_key_de_gemini
-NODE_ENV=production
-```
+### Requisitos en el servidor:
+- Tener instalado **Docker** y **Docker Compose**.
 
-### 3. Instalar Dependencias y Compilar
-```bash
-npm install
-npm run build
-```
+### Pasos:
 
-### 4. Iniciar con PM2
-```bash
-npm install -g pm2
-pm2 start "npx next start -H 0.0.0.0 -p 3001" --name "finanzas-paraguay"
-pm2 save
-pm2 startup
-```
+1. **Subir los archivos a tu servidor:**
+   Podés clonar el repositorio o copiar la carpeta del proyecto a tu servidor (por ejemplo, a `/opt/finanzas-inteligentes`):
+   ```bash
+   scp -r finanzas-inteligentes usuario@tu-servidor-ip:/opt/
+   ```
+
+2. **Ingresar a la carpeta en tu servidor:**
+   ```bash
+   cd /opt/finanzas-inteligentes
+   ```
+
+3. **(Opcional) Editar variables en `docker-compose.yml`:**
+   Podés cambiar `SESSION_SECRET` por cualquier frase larga aleatoria para proteger las cookies de sesión.
+
+4. **Levantar el contenedor:**
+   ```bash
+   docker compose up -d --build
+   ```
+
+5. ¡Listo! La aplicación ya está corriendo en el puerto `3000` de tu servidor (`http://tu-servidor-ip:3000`).
 
 ---
 
-## 🐳 3. Despliegue Alternativo con Docker & Docker Compose
+## 🔒 3. Conectar Dominio y Certificado SSL (HTTPS Gratuito)
 
-Si prefieres aislar todo en contenedores Docker:
+Para que puedas entrar desde tu celular de forma segura (`https://mis-finanzas.tudominio.com`), podés usar **Caddy** (la opción más fácil) o **Nginx**.
 
-```bash
-# 1. Asegurar variables en docker-compose.yml o .env
-# 2. Levantar los servicios:
-docker compose up -d --build
-```
-La aplicación quedará escuchando en el puerto `3000`.
+### Opción A: Con Caddy (Configuración en 3 líneas con SSL automático)
+Instalá Caddy en tu servidor y creá el archivo `/etc/caddy/Caddyfile`:
 
----
-
-## 🔒 4. Configurar Dominio y HTTPS Gratuito con Nginx y Certbot
-
-### 1. Configurar Nginx
-Crea el archivo `/etc/nginx/sites-available/alpedo.conf`:
-
-```nginx
-server {
-    server_name misfinanzas.tudominio.com;
-
-    location / {
-        proxy_pass http://127.0.0.1:3001;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
-    }
+```caddyfile
+mis-finanzas.tudominio.com {
+    reverse_proxy localhost:3000
 }
 ```
 
-Habilita el sitio y reinicia Nginx:
-```bash
-sudo ln -s /etc/nginx/sites-available/alpedo.conf /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl reload nginx
-```
+Reiniciá Caddy (`sudo systemctl restart caddy`) y ya tendrás HTTPS con certificado Let's Encrypt automático.
 
-### 2. Instalar Certificado SSL Let's Encrypt
-```bash
-sudo apt install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d misfinanzas.tudominio.com
-```
+### Opción B: Cloudflare Tunnels (Zero Trust - No requiere abrir puertos)
+Si tenés tu dominio en Cloudflare, podés instalar `cloudflared` en tu servidor y apuntar el túnel a `http://localhost:3000`. No necesitás abrir puertos en el firewall ni configurar IP pública fija.
 
 ---
 
-## 💾 5. Copias de Seguridad de la Base de Datos
+## 💾 4. Copias de Seguridad (Backups)
 
-Para respaldar tu base de datos PostgreSQL automáticamente:
-```bash
-pg_dump -U alpedo_user -h 127.0.0.1 alpedo_db > backup_$(date +%F).sql
-```
-O desde la interfaz web en la pestaña **Ajustes**, descargando el respaldo completo en formato JSON.
+Tenés 2 formas súper fáciles de respaldar tu información:
+
+1. **Desde la Interfaz Web:**
+   Andá a la pestaña **Ajustes & Respaldo** y hacé clic en **"Descargar Copia de Seguridad Completa (JSON)"**. Podés guardarlo en tu compu o celular y restaurarlo cuando quieras con un solo clic.
+
+2. **Copiando el archivo SQLite:**
+   Todos tus datos están en un solo archivo: `./data/finanzas.db`.
+   Hacer un backup es tan simple como copiar ese archivo:
+   ```bash
+   cp /opt/finanzas-inteligentes/data/finanzas.db /backups/finanzas_$(date +%F).db
+   ```

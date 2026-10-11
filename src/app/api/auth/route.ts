@@ -18,6 +18,10 @@ interface RateLimitRecord {
 }
 const loginAttempts = new Map<string, RateLimitRecord>();
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 function getClientIdentifier(req: Request): string {
   const forwarded = req.headers.get("x-forwarded-for");
   if (forwarded) return forwarded.split(",")[0].trim();
@@ -60,14 +64,23 @@ export async function POST(req: Request) {
       );
     }
 
-    let body: any;
+    let parsedBody: unknown;
     try {
-      body = await req.json();
+      parsedBody = await req.json();
     } catch {
       return NextResponse.json({ error: "Formato JSON inválido" }, { status: 400 });
     }
 
-    const { action, name, email, pin, oldPin, newPin } = body || {};
+    if (!isRecord(parsedBody)) {
+      return NextResponse.json({ error: "Formato JSON inválido" }, { status: 400 });
+    }
+    const body = parsedBody;
+    const action = typeof body.action === "string" ? body.action : "";
+    const name = typeof body.name === "string" ? body.name : "";
+    const email = typeof body.email === "string" ? body.email : "";
+    const pin = typeof body.pin === "string" ? body.pin : "";
+    const oldPin = typeof body.oldPin === "string" ? body.oldPin : "";
+    const newPin = typeof body.newPin === "string" ? body.newPin : "";
 
     // 1. REGISTRATION (Crear cuenta nueva para probar y compartir)
     if (action === "register") {
@@ -181,7 +194,7 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ error: "Acción no reconocida" }, { status: 400 });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Auth error:", error);
     return NextResponse.json({ error: "Error en el servidor de autenticación" }, { status: 500 });
   }

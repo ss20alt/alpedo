@@ -49,7 +49,7 @@ export interface LoanSimulationImpact {
   monthlyPayment: number;
   totalPayment: number;
   totalInterest: number;
-  debtToIncomeRatio: number; // % of total income
+  debtToIncomeRatio: number; // % of recorded income; displayed only when income exists
   projectedNetSavings: number;
   projectedSavingsRate: number;
   currentHealth: FinancialHealth;
@@ -286,7 +286,7 @@ export function simulateLoanImpact(
   const simulatedTotalExpenses = metrics.totalExpenses + monthlyPayment;
   const projectedNetSavings = metrics.totalIncome - simulatedTotalExpenses;
   const projectedSavingsRate = metrics.totalIncome > 0 ? (projectedNetSavings / metrics.totalIncome) * 100 : 0;
-  const debtToIncomeRatio = metrics.totalIncome > 0 ? (monthlyPayment / metrics.totalIncome) * 100 : 100;
+  const debtToIncomeRatio = metrics.totalIncome > 0 ? (monthlyPayment / metrics.totalIncome) * 100 : 0;
 
   const currentHealth = metrics.health;
   const projectedHealth = calculateFinancialHealth(
@@ -303,34 +303,39 @@ export function simulateLoanImpact(
 
   // Verdict evaluation
   let verdictStatus: "SEGURO" | "VIABLE" | "AGUANTABLE" | "RIESGOSO" | "PELIGRO_ASFIXIA" = "VIABLE";
-  let verdictTitle = "Préstamo Viable";
-  let verdictDescription = "La cuota calza en tu presupuesto mensual.";
+  let verdictTitle = "Margen disponible";
+  let verdictDescription = "La cuota se compara con los ingresos y gastos registrados.";
   let verdictColor = "bg-teal-950 text-teal-300 border-teal-700";
 
-  if (projectedNetSavings < 0) {
+  if (metrics.totalIncome <= 0) {
+    verdictStatus = "AGUANTABLE";
+    verdictTitle = "Faltan ingresos registrados";
+    verdictDescription = "Registrá tus ingresos para estimar cómo esta cuota cambiaría tu margen mensual.";
+    verdictColor = "bg-amber-950 text-amber-300 border-amber-700";
+  } else if (projectedNetSavings < 0) {
     verdictStatus = "PELIGRO_ASFIXIA";
-    verdictTitle = "¡PELIGRO: Quiebra / Déficit Mensual!";
-    verdictDescription = `Si tomás este crédito, vas a quedar en rojo por ₲ ${Math.round(Math.abs(projectedNetSavings)).toLocaleString("es-PY")} todos los meses. Salvo que aumentes ingresos o cortes gastos ya, no lo tomes.`;
+    verdictTitle = "Margen mensual negativo";
+    verdictDescription = `Con los registros actuales, los gastos más esta cuota superarían los ingresos en ₲ ${Math.round(Math.abs(projectedNetSavings)).toLocaleString("es-PY")} al mes.`;
     verdictColor = "bg-rose-950 text-rose-300 border-rose-700";
   } else if (debtToIncomeRatio > 35 || projectedSavingsRate < 5) {
     verdictStatus = "RIESGOSO";
-    verdictTitle = "Riesgo Alto: Margen al Mínimo";
-    verdictDescription = `La cuota se come el ${debtToIncomeRatio.toFixed(1)}% de tus ingresos. Vas a quedar con muy poco aire para imprevistos diarios.`;
+    verdictTitle = "Margen muy ajustado";
+    verdictDescription = `La cuota representa el ${debtToIncomeRatio.toFixed(1)}% de los ingresos registrados y deja poco margen según tus gastos actuales.`;
     verdictColor = "bg-orange-950 text-orange-300 border-orange-700";
   } else if (debtToIncomeRatio > 20 || projectedHealth.level === "AGUANTABLE") {
     verdictStatus = "AGUANTABLE";
-    verdictTitle = "Aguantable con Disciplina";
-    verdictDescription = `Podés pagarlo, pero tu salud financiera bajará a 'Aguantable'. No deberías asumir más compromisos hasta terminarlo.`;
+    verdictTitle = "Margen ajustado";
+    verdictDescription = `La cuota representa el ${debtToIncomeRatio.toFixed(1)}% de los ingresos registrados. Revisá otros pagos que no estén cargados en la app.`;
     verdictColor = "bg-amber-950 text-amber-300 border-amber-700";
   } else if (debtToIncomeRatio <= 10 && projectedHealth.score >= 70) {
     verdictStatus = "SEGURO";
-    verdictTitle = "Préstamo Seguro y Cómodo";
-    verdictDescription = `La cuota representa solo el ${debtToIncomeRatio.toFixed(1)}% de tus ingresos. Mantenés una salud financiera excelente y margen de ahorro.`;
+    verdictTitle = "Margen disponible";
+    verdictDescription = `La cuota representa el ${debtToIncomeRatio.toFixed(1)}% de los ingresos registrados. El cálculo muestra margen positivo con los datos actuales.`;
     verdictColor = "bg-emerald-950 text-emerald-300 border-emerald-700";
   } else {
     verdictStatus = "VIABLE";
-    verdictTitle = "Préstamo Aceptable";
-    verdictDescription = `La cuota representa el ${debtToIncomeRatio.toFixed(1)}% de tus ingresos. Es manejable sin comprometer tus necesidades básicas.`;
+    verdictTitle = "Margen disponible";
+    verdictDescription = `La cuota representa el ${debtToIncomeRatio.toFixed(1)}% de los ingresos registrados. Revisá el costo total y otros compromisos antes de comparar ofertas.`;
     verdictColor = "bg-teal-950 text-teal-300 border-teal-700";
   }
 

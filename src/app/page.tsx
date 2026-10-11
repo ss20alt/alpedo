@@ -10,7 +10,6 @@ import {
   Calendar,
   ArrowRight,
   TrendingUp,
-  Sparkles,
   Flame,
   Layers,
   Heart,
@@ -22,6 +21,8 @@ import {
   Eye,
   EyeOff,
   HelpCircle,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { Transaction, FinancialMetrics } from "@/lib/finance-engine";
 import PinModal from "@/components/PinModal";
@@ -34,8 +35,10 @@ import ChallengeTab from "@/components/ChallengeTab";
 import CueroModal from "@/components/CueroModal";
 import CouplesTab from "@/components/CouplesTab";
 import StreaksTab from "@/components/StreaksTab";
-import InteractiveTour from "@/components/InteractiveTour";
+import InteractiveTour, { type TourStep } from "@/components/InteractiveTour";
 import { triggerHaptic } from "@/lib/haptics";
+import FinanceIcon from "@/components/FinanceIcon";
+import { formatParaguayMonthLabel, getParaguayMonthString } from "@/lib/date-utils";
 
 export default function Home() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
@@ -43,15 +46,19 @@ export default function Home() {
   const [isPinConfigured, setIsPinConfigured] = useState<boolean>(true);
   const [authLoading, setAuthLoading] = useState<boolean>(true);
 
-  const [currentTab, setCurrentTab] = useState<"dashboard" | "couples" | "streaks" | "loans" | "challenge" | "transactions" | "grouped" | "settings">("dashboard");
+  const [currentTab, setCurrentTab] = useState<TourStep["targetTab"]>("dashboard");
   const [selectedMonth, setSelectedMonth] = useState<string>(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    return getParaguayMonthString();
   });
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [metrics, setMetrics] = useState<FinancialMetrics | null>(null);
-  const [monthlyHistory, setMonthlyHistory] = useState<any[]>([]);
+  const [monthlyHistory, setMonthlyHistory] = useState<Array<{
+    month: string;
+    total_expenses: number;
+    total_income: number;
+    al_pedo_expenses: number;
+  }>>([]);
   const [recurringExpenses, setRecurringExpenses] = useState<Transaction[]>([]);
   const [availableMonths, setAvailableMonths] = useState<string[]>([]);
   const [dataLoading, setDataLoading] = useState<boolean>(false);
@@ -81,6 +88,20 @@ export default function Home() {
   const [isTourOpen, setIsTourOpen] = useState<boolean>(false);
   const [privacyMode, setPrivacyMode] = useState<boolean>(false);
   const tabsContainerRef = React.useRef<HTMLDivElement>(null);
+  const [tabScrollEdges, setTabpcrollEdges] = useState({ left: false, right: true });
+
+  const updateTabScrollEdges = useCallback(() => {
+    const element = tabsContainerRef.current;
+    if (!element) return;
+
+    const next = {
+      left: element.scrollLeft > 4,
+      right: element.scrollLeft + element.clientWidth < element.scrollWidth - 4,
+    };
+    setTabpcrollEdges((current) =>
+      current.left === next.left && current.right === next.right ? current : next,
+    );
+  }, []);
 
   // Native Pull-to-Refresh state
   const [pullDistance, setPullDistance] = useState<number>(0);
@@ -89,10 +110,10 @@ export default function Home() {
   const touchPullStartY = React.useRef<number | null>(null);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("alpedo_privacy_mode");
-      if (saved === "true") setPrivacyMode(true);
-    }
+    const timer = window.setTimeout(() => {
+      setPrivacyMode(localStorage.getItem("alpedo_privacy_mode") === "true");
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   // First-time interactive guided tour auto-trigger
@@ -109,17 +130,39 @@ export default function Home() {
   }, [isAuthenticated]);
 
 
-  const handleNavigateTab = useCallback((tab: "dashboard" | "couples" | "streaks" | "loans" | "challenge" | "transactions" | "grouped" | "settings") => {
+  const handleNavigateTab = useCallback((tab: TourStep["targetTab"]) => {
     setCurrentTab(tab);
   }, []);
 
   useEffect(() => {
+    const element = tabsContainerRef.current;
+    if (!element) return;
+
+    const observer = new ResizeObserver(updateTabScrollEdges);
+    observer.observe(element);
+    const frame = window.requestAnimationFrame(updateTabScrollEdges);
+
+    return () => {
+      observer.disconnect();
+      window.cancelAnimationFrame(frame);
+    };
+  }, [updateTabScrollEdges]);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        window.scrollTo(0, 0);
+      });
+    });
+
     if (tabsContainerRef.current) {
       const activeBtn = tabsContainerRef.current.querySelector<HTMLElement>(`[data-tab="${currentTab}"]`);
       if (activeBtn) {
         activeBtn.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
       }
     }
+
+    return () => window.cancelAnimationFrame(frame);
   }, [currentTab]);
 
   const checkAuth = useCallback(async () => {
@@ -252,14 +295,17 @@ export default function Home() {
   }, [selectedMonth]);
 
   useEffect(() => {
-    checkAuth();
+    const timer = window.setTimeout(() => void checkAuth(), 0);
+    return () => window.clearTimeout(timer);
   }, [checkAuth]);
 
   useEffect(() => {
-    if (isAuthenticated) {
-      fetchSettings();
-      fetchData();
-    }
+    if (!isAuthenticated) return;
+    const timer = window.setTimeout(() => {
+      void fetchSettings();
+      void fetchData();
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [isAuthenticated, fetchData, fetchSettings]);
 
   const handleLogout = async () => {
@@ -362,20 +408,19 @@ export default function Home() {
 
   // PWA Home Screen Shortcuts Action support (?action=new, ?action=cuero)
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      const action = params.get("action");
-      if (action === "new") {
-        handleAddNew();
-      } else if (action === "cuero") {
-        setIsCueroOpen(true);
-      }
-    }
+    const params = new URLSearchParams(window.location.search);
+    const action = params.get("action");
+    if (action !== "new" && action !== "cuero") return;
+    const timer = window.setTimeout(() => {
+      if (action === "new") handleAddNew();
+      else setIsCueroOpen(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   if (authLoading) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-[#EEF2F8] text-slate-600">
+      <div className="app-viewport flex w-full items-center justify-center bg-[#EEF2F8] text-slate-600">
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 animate-spin rounded-full border-3 border-[#1656DB] border-t-transparent" />
           <p className="text-xs sm:text-sm font-bold text-slate-600">Iniciando sistema financiero...</p>
@@ -401,10 +446,11 @@ export default function Home() {
   const formatMoney = (val: number) => {
     return Math.round(val).toLocaleString("es-PY");
   };
+  const currentMonth = getParaguayMonthString();
 
   return (
-    <div className="min-h-screen bg-[#EEF2F8] text-slate-900 flex flex-col font-sans selection:bg-blue-600 selection:text-white">
-      {/* Copilot Signature Royal Blue Header */}
+    <div className="app-viewport bg-[#EEF2F8] text-slate-900 flex flex-col font-sans selection:bg-blue-600 selection:text-white">
+      {/* Alpedo app header */}
       <header className="sticky top-0 z-30 bg-gradient-to-b from-[#104BC9] via-[#1656DB] to-[#1C5FE6] text-white pt-safe shadow-md pb-2.5">
         <div className="mx-auto flex max-w-lg sm:max-w-2xl md:max-w-4xl items-center justify-between px-4 sm:px-6 pt-1.5 pb-2">
           {/* Left: User Avatar & Settings Trigger */}
@@ -413,7 +459,7 @@ export default function Home() {
               triggerHaptic("selection");
               setCurrentTab("settings");
             }}
-            className="flex items-center gap-1.5 px-2 py-1 rounded-full text-white/90 hover:text-white hover:bg-white/10 active:scale-95 transition"
+          className="flex min-h-11 items-center gap-1.5 px-2 py-1 rounded-full text-white/90 hover:text-white hover:bg-white/10 active:scale-95 transition"
             title="Mi Perfil & Ajustes"
             aria-label="Ajustes"
           >
@@ -425,28 +471,30 @@ export default function Home() {
             </span>
           </button>
 
-          {/* Center: App Title (Copilot Typography) */}
-          <div
+          {/* App title */}
+          <button
+            type="button"
             id="tour-header-logo"
-            className="flex flex-col items-center cursor-pointer select-none"
+            className="flex flex-col items-center cursor-pointer select-none rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/90 focus-visible:ring-offset-2 focus-visible:ring-offset-blue-600"
             onClick={() => setCurrentTab("dashboard")}
+            aria-label="Ir al tablero"
           >
             <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white flex items-center gap-1.5">
               <span>alpedo</span>
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 inline-block" />
             </h1>
-          </div>
+          </button>
 
-          {/* Right: Privacy Eye Toggle + Kape AI Assistant button + Help Tour */}
-          <div className="flex items-center gap-1">
+          {/* Help, privacy and the Kape spending check */}
+        <div className="flex items-center gap-1">
             <button
               onClick={() => {
                 triggerHaptic("selection");
                 setIsTourOpen(true);
               }}
-              className="p-2 rounded-full text-white/85 hover:text-white hover:bg-white/10 active:scale-95 transition"
-              title="Guía interactiva & Tour del sistema"
-              aria-label="Guía interactiva"
+              className="flex h-11 w-11 items-center justify-center rounded-full text-white/85 hover:text-white hover:bg-white/10 active:scale-95 transition"
+              title="Ayuda de la app"
+              aria-label="Ayuda"
             >
               <HelpCircle className="h-5 w-5" />
             </button>
@@ -461,7 +509,7 @@ export default function Home() {
                   localStorage.setItem("alpedo_privacy_mode", next ? "true" : "false");
                 }
               }}
-              className={`p-2 rounded-full transition active:scale-95 ${
+              className={`flex h-11 w-11 items-center justify-center rounded-full transition active:scale-95 ${
                 privacyMode
                   ? "bg-amber-400/25 text-amber-300 ring-1 ring-amber-400/50 shadow-sm"
                   : "text-white/85 hover:text-white hover:bg-white/10"
@@ -473,8 +521,9 @@ export default function Home() {
             </button>
 
             <button
+              id="tour-cuero-header-button"
               onClick={() => setIsCueroOpen(true)}
-              className="p-2 rounded-full text-white/90 hover:text-white hover:bg-white/10 active:scale-95 transition relative"
+              className="relative flex h-11 w-11 items-center justify-center rounded-full text-white/90 hover:text-white hover:bg-white/10 active:scale-95 transition"
               title="Preguntale al Kape: ¿Me da el cuero?"
               aria-label="Asistente Kape"
             >
@@ -484,113 +533,139 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Copilot Horizontal Pill Tabs Bar & Month Selector */}
+        {/* Main sections and month selector */}
         <div className="mx-auto max-w-lg sm:max-w-2xl md:max-w-4xl px-3 sm:px-6 pt-0.5">
           <div className="flex items-center gap-2 py-1">
             {/* Horizontal pill navigation */}
-            <div
-              ref={tabsContainerRef}
-              className="flex-1 flex items-center gap-1.5 overflow-x-auto no-scrollbar scroll-smooth py-0.5"
-            >
-              <button
-                data-tab="dashboard"
-                onClick={() => setCurrentTab("dashboard")}
-                className={`rounded-full px-4 py-1.5 text-xs font-black transition shrink-0 ${
-                  currentTab === "dashboard"
-                    ? "border border-white/90 bg-white/20 text-white shadow-sm backdrop-blur-md"
-                    : "text-white/75 hover:text-white hover:bg-white/10"
-                }`}
+            <nav aria-label="Secciones principales" className="relative min-w-0 flex-1">
+              <div
+                ref={tabsContainerRef}
+                onScroll={updateTabScrollEdges}
+                className="flex items-center gap-1.5 overflow-x-auto overscroll-x-contain no-scrollbar scroll-smooth py-0.5 pr-5"
               >
-                Tablero
-              </button>
-              <button
-                data-tab="transactions"
-                onClick={() => setCurrentTab("transactions")}
-                className={`rounded-full px-4 py-1.5 text-xs font-black transition shrink-0 ${
-                  currentTab === "transactions"
-                    ? "border border-white/90 bg-white/20 text-white shadow-sm backdrop-blur-md"
-                    : "text-white/75 hover:text-white hover:bg-white/10"
-                }`}
-              >
-                Movimientos
-              </button>
-              <button
-                data-tab="grouped"
-                onClick={() => setCurrentTab("grouped")}
-                className={`rounded-full px-4 py-1.5 text-xs font-black transition shrink-0 ${
-                  currentTab === "grouped"
-                    ? "border border-white/90 bg-white/20 text-white shadow-sm backdrop-blur-md"
-                    : "text-white/75 hover:text-white hover:bg-white/10"
-                }`}
-              >
-                Comercios
-              </button>
-              <button
-                data-tab="couples"
-                onClick={() => setCurrentTab("couples")}
-                className={`rounded-full px-4 py-1.5 text-xs font-black transition shrink-0 ${
-                  currentTab === "couples"
-                    ? "border border-white/90 bg-white/20 text-white shadow-sm backdrop-blur-md"
-                    : "text-white/75 hover:text-white hover:bg-white/10"
-                }`}
-              >
-                Pareja
-              </button>
-              <button
-                data-tab="challenge"
-                onClick={() => setCurrentTab("challenge")}
-                className={`rounded-full px-4 py-1.5 text-xs font-black transition shrink-0 ${
-                  currentTab === "challenge"
-                    ? "border border-white/90 bg-white/20 text-white shadow-sm backdrop-blur-md"
-                    : "text-white/75 hover:text-white hover:bg-white/10"
-                }`}
-              >
-                Reto 1%
-              </button>
-              <button
-                data-tab="streaks"
-                onClick={() => setCurrentTab("streaks")}
-                className={`rounded-full px-4 py-1.5 text-xs font-black transition shrink-0 ${
-                  currentTab === "streaks"
-                    ? "border border-white/90 bg-white/20 text-white shadow-sm backdrop-blur-md"
-                    : "text-white/75 hover:text-white hover:bg-white/10"
-                }`}
-              >
-                Rachas
-              </button>
-              <button
-                data-tab="loans"
-                onClick={() => setCurrentTab("loans")}
-                className={`rounded-full px-4 py-1.5 text-xs font-black transition shrink-0 ${
-                  currentTab === "loans"
-                    ? "border border-white/90 bg-white/20 text-white shadow-sm backdrop-blur-md"
-                    : "text-white/75 hover:text-white hover:bg-white/10"
-                }`}
-              >
-                Préstamos
-              </button>
-            </div>
+                <button
+                  data-tab="dashboard"
+                  aria-current={currentTab === "dashboard" ? "page" : undefined}
+                  onClick={() => setCurrentTab("dashboard")}
+                  className={`rounded-full min-h-10 px-4 py-1.5 lg:min-h-0 text-xs font-black transition shrink-0 ${
+                    currentTab === "dashboard"
+                      ? "border border-white/90 bg-white/20 text-white shadow-sm backdrop-blur-md"
+                      : "text-white/75 hover:text-white hover:bg-white/10"
+                  }`}
+                >
+                  Tablero
+                </button>
+                <button
+                  data-tab="transactions"
+                  aria-current={currentTab === "transactions" ? "page" : undefined}
+                  onClick={() => setCurrentTab("transactions")}
+                  className={`rounded-full min-h-10 px-4 py-1.5 lg:min-h-0 text-xs font-black transition shrink-0 ${
+                    currentTab === "transactions"
+                      ? "border border-white/90 bg-white/20 text-white shadow-sm backdrop-blur-md"
+                      : "text-white/75 hover:text-white hover:bg-white/10"
+                  }`}
+                >
+                  Movimientos
+                </button>
+                <button
+                  data-tab="grouped"
+                  aria-current={currentTab === "grouped" ? "page" : undefined}
+                  onClick={() => setCurrentTab("grouped")}
+                  className={`rounded-full min-h-10 px-4 py-1.5 lg:min-h-0 text-xs font-black transition shrink-0 ${
+                    currentTab === "grouped"
+                      ? "border border-white/90 bg-white/20 text-white shadow-sm backdrop-blur-md"
+                      : "text-white/75 hover:text-white hover:bg-white/10"
+                  }`}
+                >
+                  Comercios
+                </button>
+                <button
+                  data-tab="couples"
+                  aria-current={currentTab === "couples" ? "page" : undefined}
+                  onClick={() => setCurrentTab("couples")}
+                  className={`rounded-full min-h-10 px-4 py-1.5 lg:min-h-0 text-xs font-black transition shrink-0 ${
+                    currentTab === "couples"
+                      ? "border border-white/90 bg-white/20 text-white shadow-sm backdrop-blur-md"
+                      : "text-white/75 hover:text-white hover:bg-white/10"
+                  }`}
+                >
+                  Pareja
+                </button>
+                <button
+                  data-tab="challenge"
+                  aria-current={currentTab === "challenge" ? "page" : undefined}
+                  onClick={() => setCurrentTab("challenge")}
+                  className={`rounded-full min-h-10 px-4 py-1.5 lg:min-h-0 text-xs font-black transition shrink-0 ${
+                    currentTab === "challenge"
+                      ? "border border-white/90 bg-white/20 text-white shadow-sm backdrop-blur-md"
+                      : "text-white/75 hover:text-white hover:bg-white/10"
+                  }`}
+                >
+                  Reto 1%
+                </button>
+                <button
+                  data-tab="streaks"
+                  aria-current={currentTab === "streaks" ? "page" : undefined}
+                  onClick={() => setCurrentTab("streaks")}
+                  className={`rounded-full min-h-10 px-4 py-1.5 lg:min-h-0 text-xs font-black transition shrink-0 ${
+                    currentTab === "streaks"
+                      ? "border border-white/90 bg-white/20 text-white shadow-sm backdrop-blur-md"
+                      : "text-white/75 hover:text-white hover:bg-white/10"
+                  }`}
+                >
+                  Rachas
+                </button>
+                <button
+                  data-tab="loans"
+                  aria-current={currentTab === "loans" ? "page" : undefined}
+                  onClick={() => setCurrentTab("loans")}
+                  className={`rounded-full min-h-10 px-4 py-1.5 lg:min-h-0 text-xs font-black transition shrink-0 ${
+                    currentTab === "loans"
+                      ? "border border-white/90 bg-white/20 text-white shadow-sm backdrop-blur-md"
+                      : "text-white/75 hover:text-white hover:bg-white/10"
+                  }`}
+                >
+                  Préstamos
+                </button>
+              </div>
+              {tabScrollEdges.left && (
+                <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-0 flex w-5 items-center justify-start bg-gradient-to-r from-[#1C5FE6] to-transparent lg:hidden">
+                  <span className="flex h-4 w-4 items-center justify-center rounded-full bg-white/15">
+                    <ChevronLeft className="h-3 w-3 text-white/90" />
+                  </span>
+                </div>
+              )}
+              {tabScrollEdges.right && (
+                <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-0 flex w-5 items-center justify-end bg-gradient-to-l from-[#1C5FE6] to-transparent lg:hidden">
+                  <span className="flex h-4 w-4 items-center justify-center rounded-full bg-white/15">
+                    <ChevronRight className="h-3 w-3 text-white/90" />
+                  </span>
+                </div>
+              )}
+            </nav>
 
-            {/* Month Filter Dropdown always pinned cleanly */}
+            {/* Compact month filter */}
             <div className="relative shrink-0">
               <select
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(e.target.value)}
-                className="appearance-none rounded-full border border-white/30 bg-white/15 pl-3 pr-7 py-1 text-[11px] font-bold text-white focus:outline-none cursor-pointer backdrop-blur-md hover:bg-white/25 transition text-center"
+                aria-label="Mes de movimientos"
+                title="Elegir mes"
+                className="h-10 w-24 appearance-none rounded-full border border-white/35 bg-white/15 pl-8 pr-2 text-xs font-extrabold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 cursor-pointer backdrop-blur-md hover:bg-white/25 transition"
               >
-                <option value={new Date().toISOString().substring(0, 7)} className="text-slate-900 bg-white">
-                  {new Date().toISOString().substring(0, 7)}
+                <option value={currentMonth} className="text-slate-900 bg-white">
+                  {formatParaguayMonthLabel(currentMonth)}
                 </option>
                 {availableMonths
-                  .filter((m) => m !== new Date().toISOString().substring(0, 7))
+                  .filter((m) => m !== currentMonth)
                   .map((m) => (
                     <option key={m} value={m} className="text-slate-900 bg-white">
-                      {m}
+                      {formatParaguayMonthLabel(m)}
                     </option>
                   ))}
                 <option value="all" className="text-slate-900 bg-white">Histórico</option>
               </select>
-              <Calendar className="pointer-events-none absolute right-2.5 top-1.5 h-3.5 w-3.5 text-white/80" />
+              <Calendar aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/85" />
             </div>
           </div>
         </div>
@@ -623,6 +698,7 @@ export default function Home() {
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
+        style={{ overflowAnchor: "none" }}
         className="mx-auto w-full max-w-lg sm:max-w-2xl md:max-w-4xl flex-1 px-3 sm:px-6 py-4 pb-28 md:pb-12"
       >
         {dataLoading && !metrics ? (
@@ -631,7 +707,7 @@ export default function Home() {
           </div>
         ) : (
           <>
-            {/* 1. COPILOT DASHBOARD VIEW */}
+            {/* Monthly dashboard */}
             {currentTab === "dashboard" && metrics && (
               <CopilotDashboard
                 metrics={metrics}
@@ -713,7 +789,7 @@ export default function Home() {
 
             {/* 3. RACHAS & DUELOS VIEW */}
             {currentTab === "streaks" && (
-              <StreaksTab currencySymbol={currencySymbol} />
+              <StreaksTab />
             )}
 
             {/* 4. LOANS SIMULATOR VIEW */}
@@ -775,7 +851,7 @@ export default function Home() {
         )}
       </main>
 
-      {/* Mobile Bottom Navigation Bar (Copilot Frosted Light Bar) */}
+      {/* Mobile bottom navigation */}
       <nav className="fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-xl border-t border-slate-200/90 pb-safe md:hidden select-none shadow-[0_-4px_25px_rgba(0,0,0,0.06)]">
         <div className="grid grid-cols-4 h-16 items-center px-2">
           {/* 1. Tablero */}
@@ -840,7 +916,7 @@ export default function Home() {
         </div>
       </nav>
 
-      {/* Floating Action Pill (Image 4 Copilot [ ⚙️ | + ] capsule for desktop) */}
+      {/* Floating action controls for desktop */}
       <div className="fixed bottom-8 right-8 z-40 hidden md:flex items-center bg-white/95 backdrop-blur-md rounded-full shadow-xl border border-slate-200/90 py-1.5 px-3.5 gap-2.5">
         <button
           onClick={() => setCurrentTab("settings")}
@@ -859,7 +935,7 @@ export default function Home() {
         </button>
       </div>
 
-      {/* Mobile Tools Bottom Sheet (Copilot Light Material Sheet) */}
+      {/* Mobile tools sheet */}
       {isToolsSheetOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/60 backdrop-blur-sm md:hidden animate-in fade-in duration-200">
           <div
@@ -892,11 +968,11 @@ export default function Home() {
                 className="flex items-center gap-3 p-3.5 rounded-2xl border border-blue-200 bg-blue-50/70 text-blue-900 hover:bg-blue-100 transition active:scale-95 col-span-2"
               >
                 <div className="h-10 w-10 rounded-xl bg-blue-500/15 text-[#1656DB] flex items-center justify-center shrink-0">
-                  <Sparkles className="h-5 w-5" />
+                  <HelpCircle className="h-5 w-5" />
                 </div>
                 <div>
-                  <div className="text-xs font-black text-slate-900">Guía & Tour Interactivo</div>
-                  <div className="text-[10px] text-slate-500">Recorrido dinámico por cada función</div>
+                  <div className="text-xs font-black text-slate-900">Guía de la app</div>
+                  <div className="text-[10px] text-slate-500">Un repaso breve de las secciones</div>
                 </div>
               </button>
 
@@ -969,8 +1045,8 @@ export default function Home() {
                   <FileSpreadsheet className="h-5 w-5" />
                 </div>
                 <div>
-                  <div className="text-xs font-bold text-slate-900">Exportar Excel</div>
-                  <div className="text-[10px] text-slate-500">Descargar CSV</div>
+                  <div className="text-xs font-bold text-slate-900">Exportar movimientos</div>
+                  <div className="text-[10px] text-slate-500">CSV compatible con Excel</div>
                 </div>
               </a>
             </div>
@@ -980,15 +1056,13 @@ export default function Home() {
 
       {/* Floating Assistant Icon (¿Me da el cuero?) */}
       <button
-        id="tour-cuero-button"
         onClick={() => setIsCueroOpen(true)}
-        className="fixed bottom-20 md:bottom-24 right-4 md:right-8 z-40 flex items-center justify-center h-12 w-12 rounded-full bg-gradient-to-tr from-[#104BC9] via-[#1656DB] to-[#1C5FE6] text-white font-black text-2xl shadow-xl shadow-blue-600/35 border-2 border-white active:scale-90 hover:scale-105 transition-transform duration-200"
+        className="fixed bottom-20 md:bottom-24 right-4 md:right-8 z-40 hidden md:flex items-center justify-center h-12 w-12 rounded-full bg-gradient-to-tr from-[#104BC9] via-[#1656DB] to-[#1C5FE6] text-white font-black text-2xl shadow-xl shadow-blue-600/35 border-2 border-white active:scale-90 hover:scale-105 transition-transform duration-200"
         title="Preguntale al Kape: ¿Me da el cuero?"
         aria-label="Asistente Kape"
       >
-        <span>🧉</span>
-        <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-400 text-[8px] font-black text-slate-950 shadow border border-white">
-          ✨
+        <FinanceIcon name="brand" className="h-6 w-6 text-white" />
+        <span aria-hidden="true" className="absolute -top-0.5 -right-0.5 h-3 w-3 rounded-full bg-emerald-400 shadow ring-2 ring-white">
         </span>
       </button>
 

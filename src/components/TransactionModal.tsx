@@ -9,15 +9,17 @@ import {
   Flame,
   Check,
   RotateCcw,
-  Sparkles,
 } from "lucide-react";
 import { Transaction } from "@/lib/finance-engine";
 import { triggerHaptic } from "@/lib/haptics";
+import FinanceIcon from "@/components/FinanceIcon";
+import { getParaguayDateString } from "@/lib/date-utils";
 
 export interface TransactionPreset {
   description: string;
   amount: number;
   category: "fijo" | "variable" | "pasivo" | "al_pedo";
+  isRecurring?: boolean;
 }
 
 interface TransactionModalProps {
@@ -41,7 +43,7 @@ export default function TransactionModal({
   const [category, setCategory] = useState<"fijo" | "variable" | "pasivo" | "al_pedo">("fijo");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [date, setDate] = useState(getParaguayDateString());
   const [isRecurring, setIsRecurring] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,30 +54,33 @@ export default function TransactionModal({
   const touchStartY = useRef<number | null>(null);
 
   useEffect(() => {
-    if (editingTransaction) {
-      setType(editingTransaction.type);
-      setCategory(editingTransaction.category);
-      setAmount(editingTransaction.amount.toString());
-      setDescription(editingTransaction.description);
-      setDate(editingTransaction.date);
-      setIsRecurring(Boolean(editingTransaction.is_recurring));
-    } else if (initialPreset) {
-      setType("expense");
-      setCategory(initialPreset.category);
-      setAmount(initialPreset.amount > 0 ? initialPreset.amount.toString() : "");
-      setDescription(initialPreset.description);
-      setDate(new Date().toISOString().split("T")[0]);
-      setIsRecurring(false);
-    } else {
-      setType("expense");
-      setCategory("variable");
-      setAmount("");
-      setDescription("");
-      setDate(new Date().toISOString().split("T")[0]);
-      setIsRecurring(false);
-    }
-    setError(null);
-    setDragOffsetY(0);
+    const timer = window.setTimeout(() => {
+      if (editingTransaction) {
+        setType(editingTransaction.type);
+        setCategory(editingTransaction.category);
+        setAmount(editingTransaction.amount.toString());
+        setDescription(editingTransaction.description);
+        setDate(editingTransaction.date);
+        setIsRecurring(Boolean(editingTransaction.is_recurring));
+      } else if (initialPreset) {
+        setType("expense");
+        setCategory(initialPreset.category);
+        setAmount(initialPreset.amount > 0 ? initialPreset.amount.toString() : "");
+        setDescription(initialPreset.description);
+        setDate(getParaguayDateString());
+        setIsRecurring(Boolean(initialPreset.isRecurring));
+      } else {
+        setType("expense");
+        setCategory("variable");
+        setAmount("");
+        setDescription("");
+        setDate(getParaguayDateString());
+        setIsRecurring(false);
+      }
+      setError(null);
+      setDragOffsetY(0);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [editingTransaction, initialPreset, isOpen]);
 
   const handleTypeChange = (newType: "income" | "expense") => {
@@ -234,7 +239,7 @@ export default function TransactionModal({
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/40 backdrop-blur-sm p-0 sm:p-4 overflow-hidden select-none">
       <div
-        className="w-full max-w-lg rounded-t-[32px] sm:rounded-[32px] border-t sm:border border-slate-100 bg-white p-4 sm:p-6 shadow-2xl max-h-[94vh] flex flex-col text-slate-900 animate-in fade-in slide-in-from-bottom-6 duration-200"
+        className="mobile-sheet-viewport-94 w-full max-w-lg rounded-t-[32px] sm:rounded-[32px] border-t sm:border border-slate-100 bg-white p-4 sm:p-6 shadow-2xl flex flex-col text-slate-900 animate-in fade-in slide-in-from-bottom-6 duration-200"
         style={{
           transform: `translateY(${dragOffsetY}px)`,
           transition: isDragging ? "none" : "transform 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
@@ -331,7 +336,7 @@ export default function TransactionModal({
                         : "bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100"
                     }`}
                   >
-                    <div className="text-lg mb-0.5">💼</div>
+                    <FinanceIcon name="briefcase" className="mx-auto mb-1 h-5 w-5 text-emerald-600" />
                     <div>Fijo</div>
                     <div className="text-[10px] text-slate-400 font-medium mt-0.5">Salario base</div>
                   </button>
@@ -344,7 +349,7 @@ export default function TransactionModal({
                         : "bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100"
                     }`}
                   >
-                    <div className="text-lg mb-0.5">📈</div>
+                    <FinanceIcon name="trend" className="mx-auto mb-1 h-5 w-5 text-teal-600" />
                     <div>Variable</div>
                     <div className="text-[10px] text-slate-400 font-medium mt-0.5">Extras / Ventas</div>
                   </button>
@@ -357,7 +362,7 @@ export default function TransactionModal({
                         : "bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100"
                     }`}
                   >
-                    <div className="text-lg mb-0.5">🏖️</div>
+                    <FinanceIcon name="wallet" className="mx-auto mb-1 h-5 w-5 text-cyan-600" />
                     <div>Pasivo</div>
                     <div className="text-[10px] text-slate-400 font-medium mt-0.5">CDA / Rentas</div>
                   </button>
@@ -373,7 +378,7 @@ export default function TransactionModal({
                         : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
                     }`}
                   >
-                    <div className="text-lg mb-0.5">🏠</div>
+                    <FinanceIcon name="home" className="mx-auto mb-1 h-5 w-5 text-slate-600" />
                     <div>Gasto Fijo</div>
                     <div className="text-[10px] text-slate-400 font-medium mt-0.5">Alquiler/ANDE</div>
                   </button>
@@ -386,7 +391,7 @@ export default function TransactionModal({
                         : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
                     }`}
                   >
-                    <div className="text-lg mb-0.5">🛒</div>
+                    <FinanceIcon name="cart" className="mx-auto mb-1 h-5 w-5 text-amber-600" />
                     <div>Variable</div>
                     <div className="text-[10px] text-slate-400 font-medium mt-0.5">Super / Nafta</div>
                   </button>
@@ -399,7 +404,7 @@ export default function TransactionModal({
                         : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
                     }`}
                   >
-                    <div className="text-lg mb-0.5">💸</div>
+                    <FinanceIcon name="flame" className="mx-auto mb-1 h-5 w-5 text-orange-600" />
                     <div className="flex items-center justify-center gap-1">
                       <Flame className="h-3 w-3 text-orange-500 inline" />
                       ¡AL PEDO!
@@ -508,7 +513,7 @@ export default function TransactionModal({
               {isAlPedoSuggested && (
                 <div className="mt-2 flex items-center justify-between rounded-xl bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 p-2.5 animate-in fade-in slide-in-from-top-1">
                   <div className="flex items-center gap-2 min-w-0">
-                    <Flame className="h-4 w-4 text-orange-500 shrink-0 animate-bounce" />
+                    <Flame className="h-4 w-4 text-orange-500 shrink-0" />
                     <span className="text-xs font-bold text-orange-800 truncate">
                       ¿Este gasto es capricho?
                     </span>
@@ -518,7 +523,7 @@ export default function TransactionModal({
                     onClick={applyAlPedoSuggestion}
                     className="shrink-0 rounded-lg bg-orange-500 text-white px-2.5 py-1 text-xs font-black shadow-sm hover:bg-orange-600 transition active:scale-95"
                   >
-                    Marcar ¡Al Pedo! 💸
+                    Marcar ¡Al Pedo!
                   </button>
                 </div>
               )}

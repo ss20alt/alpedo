@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { FinancialMetrics, calculateEmergencyFundAnalysis } from "@/lib/finance-engine";
-import { ShieldCheck, Edit3, Check, TrendingUp, Landmark, Sparkles } from "lucide-react";
+import { ShieldCheck, Edit3, Check, TrendingUp, Landmark, Lightbulb } from "lucide-react";
 
 interface EmergencyFundCardProps {
   metrics: FinancialMetrics;
@@ -234,11 +234,11 @@ export default function EmergencyFundCard({
 
         {/* Actionable Strategy Tip */}
         <div className="flex items-start gap-2 pt-2 border-t border-slate-800/80 text-[11px]">
-          <Sparkles className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+          <Lightbulb className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
           <div className="text-slate-300">
             {analysis.progressMin >= 100 ? (
               <span className="text-emerald-300 font-semibold">
-                🎉 ¡Excelente blindaje! Ya tenés cubierto tu colchón mínimo de 3 meses.
+                <span className="inline-flex items-center gap-1"><ShieldCheck className="h-4 w-4 shrink-0" /> ¡Excelente blindaje! Ya tenés cubierto tu colchón mínimo de 3 meses.</span>
                 {analysis.progressOpt < 100 && analysis.monthsToOptWithSurplus ? (
                   <span>
                     {" "}Con tu ahorro actual de {currencySymbol}{" "}

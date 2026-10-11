@@ -140,7 +140,7 @@ export async function verifyUserLogin(
     }
 
     return { success: false, error: "PIN incorrecto" };
-  } catch (err: any) {
+  } catch {
     return { success: false, error: "Error en base de datos al autenticar" };
   }
 }
@@ -264,9 +264,12 @@ export async function registerUser(
     }
 
     return { success: true, user: newUser };
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Error registering user:", err);
-    return { success: false, error: err.message || "Error al crear la cuenta" };
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Error al crear la cuenta",
+    };
   }
 }
 

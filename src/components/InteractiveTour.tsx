@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
-  Sparkles,
+  Wallet,
+  ArrowDown,
   ArrowRight,
   ArrowLeft,
   X,
@@ -17,8 +18,10 @@ import {
   Layers,
   Calendar,
   Zap,
+  MessageCircle,
 } from "lucide-react";
 import { triggerHaptic } from "@/lib/haptics";
+import FinanceIcon, { type FinanceIconName } from "@/components/FinanceIcon";
 
 export interface TourStep {
   id: string;
@@ -37,53 +40,53 @@ export interface TourStep {
 
 export const TAB_METADATA: Record<
   string,
-  { label: string; icon: string; color: string; badgeBg: string }
+  { label: string; icon: FinanceIconName; color: string; badgeBg: string }
 > = {
   dashboard: {
-    label: "Tablero Copilot",
-    icon: "📊",
+    label: "Tablero mensual",
+    icon: "trend",
     color: "#1656DB",
     badgeBg: "bg-blue-50 text-[#1656DB] border-blue-200",
   },
   transactions: {
     label: "Movimientos",
-    icon: "👆",
+    icon: "receipt",
     color: "#2563EB",
     badgeBg: "bg-blue-50 text-blue-700 border-blue-200",
   },
   grouped: {
     label: "Comercios",
-    icon: "🏪",
+    icon: "store",
     color: "#0891B2",
     badgeBg: "bg-cyan-50 text-cyan-700 border-cyan-200",
   },
   couples: {
     label: "Metas en Pareja",
-    icon: "💑",
+    icon: "heart",
     color: "#9333EA",
     badgeBg: "bg-purple-50 text-purple-700 border-purple-200",
   },
   challenge: {
     label: "Reto 1%",
-    icon: "🎯",
+    icon: "target",
     color: "#059669",
     badgeBg: "bg-emerald-50 text-emerald-800 border-emerald-200",
   },
   streaks: {
     label: "Rachas & Duelos",
-    icon: "🏆",
+    icon: "trophy",
     color: "#D97706",
     badgeBg: "bg-amber-50 text-amber-800 border-amber-200",
   },
   loans: {
     label: "Préstamos",
-    icon: "🧮",
+    icon: "creditCard",
     color: "#2563EB",
     badgeBg: "bg-blue-50 text-blue-700 border-blue-200",
   },
   settings: {
     label: "Ajustes & PIN",
-    icon: "⚙️",
+    icon: "settings",
     color: "#475569",
     badgeBg: "bg-slate-100 text-slate-800 border-slate-300",
   },
@@ -92,22 +95,22 @@ export const TAB_METADATA: Record<
 export const TOUR_STEPS: TourStep[] = [
   {
     id: "welcome",
-    title: "¡Bienvenido a alpedo.app! 🧉",
-    badge: "Copiloto Financiero",
+    title: "Bienvenido a alpedo.app",
+    badge: "Finanzas personales",
     badgeColor: "bg-blue-50 text-[#1656DB] border-blue-200",
-    icon: <Sparkles className="h-4 w-4 text-[#1656DB]" />,
+    icon: <Wallet className="h-4 w-4 text-[#1656DB]" />,
     headline: "Tu dinero con un propósito claro",
     description:
-      "La app paraguaya para controlar tus finanzas reales y no tirar plata al pedo. Te guiaremos iluminando cada función en pantalla.",
-    tip: "Esta guía dinámica ilumina cada herramienta en vivo.",
+      "La app paraguaya para ordenar tus gastos, cuidar tu presupuesto y tener tus cuentas claras.",
+    tip: "Podés volver a esta guía desde Ayuda cuando quieras.",
     targetTab: "dashboard",
     targetSelector: "#tour-header-logo",
     spotlightPadding: 6,
   },
   {
     id: "hero_balance",
-    title: "Saldo Restante & Curva 💰",
-    badge: "Tablero Copilot",
+    title: "Saldo restante y curva",
+    badge: "Tablero mensual",
     badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-200",
     icon: <TrendingUp className="h-4 w-4 text-emerald-600" />,
     headline: "Sabé exactamente cuánto podés gastar hoy",
@@ -120,7 +123,7 @@ export const TOUR_STEPS: TourStep[] = [
   },
   {
     id: "spending_pace",
-    title: "Ritmo de Gasto Mensual ⏱️",
+    title: "Ritmo de gasto mensual",
     badge: "Velocímetro Financiero",
     badgeColor: "bg-rose-50 text-rose-700 border-rose-200",
     icon: <Gauge className="h-4 w-4 text-rose-600" />,
@@ -134,13 +137,13 @@ export const TOUR_STEPS: TourStep[] = [
   },
   {
     id: "quick_spend",
-    title: "Gasto Rápido a 1-Toque ⚡",
+    title: "Gasto rápido en un toque",
     badge: "Registro Ágil",
     badgeColor: "bg-orange-50 text-orange-700 border-orange-200",
     icon: <Zap className="h-4 w-4 text-amber-500" />,
     headline: "Bolt, Biggie o Lomito en 2 segundos",
     description:
-      "Atajos directos para cargar consumos frecuentes al instante. Todo gasto prescindible se marca como 'Al Pedo 🔥'.",
+      "Atajos directos para cargar consumos frecuentes al instante. Los gastos prescindibles se marcan como 'Al Pedo'.",
     tip: "Un solo toque para registrar al paso.",
     targetTab: "dashboard",
     targetSelector: "#tour-quick-spend",
@@ -148,28 +151,28 @@ export const TOUR_STEPS: TourStep[] = [
   },
   {
     id: "cuero_ai",
-    title: "¿Me da el cuero? 🧉 IA",
-    badge: "Asistente Kape con IA",
+    title: "¿Me da el cuero?",
+    badge: "Consejo Kape",
     badgeColor: "bg-amber-50 text-amber-800 border-amber-200",
-    icon: <span className="text-base">🧉</span>,
+    icon: <MessageCircle className="h-4 w-4 text-[#1656DB]" />,
     headline: "Consultale al Kape antes de gastar",
     description:
-      "Asistente con IA: consultale antes de comprar algo por impulso y te dirá con sinceridad si tu bolsillo aguanta el gasto.",
-    tip: "Usalo antes de hacer compras impulsivas.",
+      "Tocá la burbuja de chat de arriba para ver cómo una compra impactaría en tu presupuesto.",
+    tip: "Podés consultar antes de decidir.",
     targetTab: "dashboard",
-    targetSelector: "#tour-cuero-button",
+    targetSelector: "#tour-cuero-header-button",
     spotlightPadding: 8,
     isCircular: true,
   },
   {
     id: "transactions_swipe",
-    title: "Movimientos & Gestos Táctiles 👆",
+    title: "Movimientos y gestos táctiles",
     badge: "Lista & Swipe",
     badgeColor: "bg-blue-50 text-blue-700 border-blue-200",
     icon: <Flame className="h-4 w-4 text-orange-500" />,
     headline: "Deslizá para categorizar al instante",
     description:
-      "Tus transacciones: deslizá a la DERECHA para marcar 'Al Pedo 🔥', o a la IZQUIERDA para editar o borrar.",
+      "Deslizá a la derecha para editar; a la izquierda para marcar 'Al Pedo' o borrar.",
     tip: "Gestos swipe rápidos con respuesta háptica.",
     targetTab: "transactions",
     targetSelector: "#tour-transactions-list",
@@ -177,7 +180,7 @@ export const TOUR_STEPS: TourStep[] = [
   },
   {
     id: "grouped_merchants",
-    title: "Gastos por Comercio 🏪",
+    title: "Gastos por comercio",
     badge: "Comercios Agrupados",
     badgeColor: "bg-cyan-50 text-cyan-700 border-cyan-200",
     icon: <Layers className="h-4 w-4 text-cyan-600" />,
@@ -191,7 +194,7 @@ export const TOUR_STEPS: TourStep[] = [
   },
   {
     id: "couples_goals",
-    title: "Metas en Pareja 💑",
+    title: "Metas en pareja",
     badge: "Ahorro Compartido",
     badgeColor: "bg-purple-50 text-purple-700 border-purple-200",
     icon: <Heart className="h-4 w-4 text-purple-600" />,
@@ -205,7 +208,7 @@ export const TOUR_STEPS: TourStep[] = [
   },
   {
     id: "challenge_saving",
-    title: "Reto 1% Progresivo 🎯",
+    title: "Reto progresivo del 1%",
     badge: "Método de Ahorro",
     badgeColor: "bg-emerald-50 text-emerald-800 border-emerald-200",
     icon: <Calendar className="h-4 w-4 text-emerald-600" />,
@@ -219,7 +222,7 @@ export const TOUR_STEPS: TourStep[] = [
   },
   {
     id: "streaks_leaderboard",
-    title: "Rachas Anti-Al Pedo & Duelos 🏆",
+    title: "Rachas y duelos",
     badge: "Gamificación Kp",
     badgeColor: "bg-amber-50 text-amber-800 border-amber-200",
     icon: <Trophy className="h-4 w-4 text-amber-600" />,
@@ -233,7 +236,7 @@ export const TOUR_STEPS: TourStep[] = [
   },
   {
     id: "loan_simulator",
-    title: "Simulador de Préstamos 🧮",
+    title: "Simulador de préstamos",
     badge: "Capacidad de Cuota",
     badgeColor: "bg-blue-50 text-blue-700 border-blue-200",
     icon: <Calculator className="h-4 w-4 text-blue-600" />,
@@ -247,14 +250,14 @@ export const TOUR_STEPS: TourStep[] = [
   },
   {
     id: "privacy_pin",
-    title: "Modo Privacidad 👁️",
+    title: "Privacidad en un toque",
     badge: "Privacidad Total",
     badgeColor: "bg-slate-100 text-slate-800 border-slate-300",
     icon: <Eye className="h-4 w-4 text-[#1656DB]" />,
     headline: "Ocultá tus números en 1 toque",
     description:
-      "Tocá este icono del ojo en la barra superior para enmascarar todos tus saldos a '••••••' en público.",
-    tip: "Tus datos están protegidos con PIN maestro.",
+      "Tocá el ojo de arriba para ocultar tus saldos. Volvé a tocarlo para mostrarlos.",
+    tip: "Práctico cuando mirás la app en público.",
     targetTab: "dashboard",
     targetSelector: "#tour-privacy-btn",
     spotlightPadding: 6,
@@ -265,7 +268,7 @@ export const TOUR_STEPS: TourStep[] = [
 interface InteractiveTourProps {
   isOpen: boolean;
   onClose: () => void;
-  onNavigateTab: (tab: any) => void;
+  onNavigateTab: (tab: TourStep["targetTab"]) => void;
 }
 
 interface TargetBox {
@@ -650,13 +653,13 @@ export default function InteractiveTour({
         >
           {/* Animated Attention Badge with screen safe-clamping */}
           <div
-            className={`absolute flex items-center gap-1 rounded-full bg-gradient-to-r from-[#104BC9] to-[#1C5FE6] px-2.5 py-0.5 text-[9px] sm:text-[10px] font-black tracking-wider text-white shadow-lg animate-bounce ${
+            className={`absolute flex items-center gap-1 rounded-full bg-[#104BC9] px-2.5 py-0.5 text-[9px] sm:text-[10px] font-black tracking-wider text-white shadow-md ${
               isRightBelowHeader
                 ? "top-2 left-2.5"
                 : "-top-3.5"
             } ${isNearRight ? "right-1" : "left-2"}`}
           >
-            <span>✨ MIRÁ ACÁ</span>
+            <><ArrowDown className="h-3 w-3" /> {currentStep.isCircular ? "Tocá aquí" : "Ver sección"}</>
           </div>
         </div>
       )}
@@ -672,7 +675,7 @@ export default function InteractiveTour({
         className={`fixed inset-x-3 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 z-50 max-w-[400px] w-auto sm:w-full transition-all duration-300 ease-out ${
           targetBox
             ? isTargetInUpperHalf
-              ? "bottom-3 sm:bottom-4"
+              ? "bottom-[calc(env(safe-area-inset-bottom)+12px)] sm:bottom-4"
               : "top-14 sm:top-16"
             : "bottom-3 sm:top-1/2 sm:-translate-y-1/2"
         }`}
@@ -693,7 +696,7 @@ export default function InteractiveTour({
               <span
                 className={`rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-wider flex items-center gap-1 truncate ${currentStep.badgeColor}`}
               >
-                <span>{currentTabMeta.icon}</span>
+                <FinanceIcon name={currentTabMeta.icon} className="h-4 w-4" />
                 <span className="truncate">{currentStep.badge}</span>
               </span>
               <span className="text-[10px] font-bold text-slate-400 shrink-0">

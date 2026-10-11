@@ -111,16 +111,16 @@ export default function MetricsCards({ metrics, currencySymbol }: MetricsCardsPr
 
         <div className="mt-3 sm:mt-4 border-t border-orange-900/40 pt-2.5 sm:pt-3 text-[11px] sm:text-xs">
           {expenses.al_pedo > 0 ? (
-            <p className="text-slate-300 leading-snug">
-              💡 Cortando estos caprichos sumás{" "}
+            <p className="flex items-start gap-1.5 text-slate-300 leading-snug">
+              <Flame className="mt-0.5 h-3.5 w-3.5 shrink-0 text-orange-400" /> Cortando estos caprichos sumás{" "}
               <strong className="text-orange-300 font-mono font-bold">
                 {currencySymbol} {formatMoney(expenses.al_pedo)}
               </strong>{" "}
               libres por mes.
             </p>
           ) : (
-            <p className="text-emerald-400 font-medium">
-              ✨ ¡Excelente! No tenés gastos al pedo registrados este mes.
+            <p className="flex items-start gap-1.5 text-emerald-400 font-medium">
+              <Wallet className="mt-0.5 h-3.5 w-3.5 shrink-0" /> ¡Excelente! No tenés gastos al pedo registrados este mes.
             </p>
           )}
         </div>

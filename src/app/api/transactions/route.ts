@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
+import { getParaguayDateString } from "@/lib/date-utils";
 import { calculateFinancialMetrics, Transaction } from "@/lib/finance-engine";
 import crypto from "crypto";
+import type { DbParameter } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +19,7 @@ export async function GET(req: Request) {
     const month = searchParams.get("month"); // e.g. "2026-10"
 
     let queryStr = "SELECT * FROM transactions WHERE (user_id = ? OR (user_id IS NULL AND ? = 1))";
-    const params: any[] = [user.id, user.id];
+    const params: DbParameter[] = [user.id, user.id];
 
     if (month && month !== "all") {
       queryStr += " AND date::text LIKE ?";
@@ -36,8 +38,15 @@ export async function GET(req: Request) {
     );
     const availableMonths = monthsRows.map((r) => r.month);
 
-    const currentYear =
-      month && month !== "all" ? month.substring(0, 4) : String(new Date().getFullYear());
+    const historyEndMonth =
+      month && month !== "all" ? month : getParaguayDateString().slice(0, 7);
+    const [historyEndYear, historyEndMonthNumber] = historyEndMonth.split("-").map(Number);
+    const historyStart = new Date(Date.UTC(historyEndYear, historyEndMonthNumber - 12, 1))
+      .toISOString()
+      .slice(0, 7);
+    const historyEndExclusive = new Date(Date.UTC(historyEndYear, historyEndMonthNumber, 1))
+      .toISOString()
+      .slice(0, 7);
     const monthlyHistoryRows = await db.query<{
       month: string;
       total_expenses: number;
@@ -50,10 +59,11 @@ export async function GET(req: Request) {
         SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as total_income,
         SUM(CASE WHEN type = 'expense' AND category = 'al_pedo' THEN amount ELSE 0 END) as al_pedo_expenses
        FROM transactions
-       WHERE to_char(date, 'YYYY') = ? AND (user_id = ? OR (user_id IS NULL AND ? = 1))
+       WHERE to_char(date, 'YYYY-MM') >= ? AND to_char(date, 'YYYY-MM') < ?
+         AND (user_id = ? OR (user_id IS NULL AND ? = 1))
        GROUP BY to_char(date, 'YYYY-MM')
        ORDER BY month ASC`,
-      [currentYear, user.id, user.id]
+      [historyStart, historyEndExclusive, user.id, user.id]
     );
 
     const recurringExpenses = await db.query<Transaction>(
@@ -113,7 +123,7 @@ export async function POST(req: Request) {
     const cleanDesc = description.trim().slice(0, 150);
 
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-    const txDate = date && dateRegex.test(date) ? date : new Date().toISOString().split("T")[0];
+    const txDate = date && dateRegex.test(date) ? date : getParaguayDateString();
     const id = crypto.randomUUID();
 
     await db.execute(
@@ -155,7 +165,7 @@ export async function PUT(req: Request) {
     const cleanDesc = description.trim().slice(0, 150);
 
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-    const txDate = date && dateRegex.test(date) ? date : new Date().toISOString().split("T")[0];
+    const txDate = date && dateRegex.test(date) ? date : getParaguayDateString();
 
     await db.execute(
       `UPDATE transactions

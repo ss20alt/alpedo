@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
+import type { DbParameter } from "@/lib/db";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
 export async function GET() {
   const user = await getCurrentUser();
@@ -44,11 +49,15 @@ export async function POST(req: Request) {
   }
 
   try {
-    const body = await req.json();
+    const parsedBody: unknown = await req.json();
+    if (!isRecord(parsedBody)) {
+      return NextResponse.json({ error: "Formato JSON inválido" }, { status: 400 });
+    }
+    const body = parsedBody;
 
     // Update in users table
     const updates: string[] = [];
-    const params: any[] = [];
+    const params: DbParameter[] = [];
 
     const userFields = [
       "currency_symbol",
@@ -64,9 +73,10 @@ export async function POST(req: Request) {
     ];
 
     for (const field of userFields) {
-      if (body[field] !== undefined) {
+      const value = body[field];
+      if (typeof value === "string" || typeof value === "number" || typeof value === "boolean" || value === null) {
         updates.push(`${field} = ?`);
-        params.push(body[field]);
+        params.push(value);
       }
     }
 
@@ -90,8 +100,9 @@ export async function POST(req: Request) {
         "account_base_balance",
       ];
       for (const key of allowedKeys) {
-        if (body[key] !== undefined) {
-          const val = String(body[key]);
+        const value = body[key];
+        if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+          const val = String(value);
           await db.execute(
             "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value",
             [key, val]

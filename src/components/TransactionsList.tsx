@@ -14,13 +14,14 @@ import {
   X,
   Layers,
   ListOrdered,
-  Plus,
   FileSpreadsheet,
   ArrowUpDown,
   Zap,
 } from "lucide-react";
+import FinanceIcon from "@/components/FinanceIcon";
 import GroupedExpensesView from "./GroupedExpensesView";
 import { triggerHaptic } from "@/lib/haptics";
+import { formatParaguayDateLabel } from "@/lib/date-utils";
 
 interface TransactionsListProps {
   transactions: Transaction[];
@@ -189,7 +190,7 @@ function SwipeableTransactionItem({
             <div className="flex items-center gap-1.5 flex-wrap text-[10px] sm:text-[11px] text-slate-400 mt-1">
               <span className="flex items-center gap-1 shrink-0 text-slate-400 font-semibold">
                 <Calendar className="h-3 w-3 text-slate-400" />
-                {tx.date}
+                {formatParaguayDateLabel(tx.date)}
               </span>
               {getCategoryBadge(tx)}
               {tx.is_recurring ? (
@@ -270,6 +271,7 @@ export default function TransactionsList({
   const [filterRecurring, setFilterRecurring] = useState<boolean>(initialRecurringOnly);
   const [amountFilter, setAmountFilter] = useState<"all" | "big" | "ant">("all");
   const [sortBy, setSortBy] = useState<"date_desc" | "date_asc" | "amount_desc" | "amount_asc">("date_desc");
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
 
   const formatMoney = (val: number) => {
     if (privacyMode) return "••••••";
@@ -326,19 +328,19 @@ export default function TransactionsList({
         case "fijo":
           return (
             <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200/80">
-              💼 Fijo
+              <><FinanceIcon name="briefcase" className="h-3 w-3" /> Fijo</>
             </span>
           );
         case "variable":
           return (
             <span className="inline-flex items-center gap-1 rounded-full bg-teal-50 px-2 py-0.5 text-[10px] font-bold text-teal-700 border border-teal-200/80">
-              📈 Var.
+              <><FinanceIcon name="trend" className="h-3 w-3" /> Var.</>
             </span>
           );
         case "pasivo":
           return (
             <span className="inline-flex items-center gap-1 rounded-full bg-cyan-50 px-2 py-0.5 text-[10px] font-bold text-cyan-700 border border-cyan-200/80">
-              🏖️ Pasivo
+              <><FinanceIcon name="wallet" className="h-3 w-3" /> Pasivo</>
             </span>
           );
       }
@@ -347,13 +349,13 @@ export default function TransactionsList({
         case "fijo":
           return (
             <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-700 border border-slate-200">
-              🏠 Fijo
+              <><FinanceIcon name="home" className="h-3 w-3" /> Fijo</>
             </span>
           );
         case "variable":
           return (
             <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700 border border-amber-200/80">
-              🛒 Var.
+              <><FinanceIcon name="cart" className="h-3 w-3" /> Var.</>
             </span>
           );
         case "al_pedo":
@@ -374,7 +376,7 @@ export default function TransactionsList({
       <div className="rounded-full border border-slate-200/80 bg-slate-200/60 p-1 flex gap-1 shadow-inner">
         <button
           onClick={() => setViewMode("list")}
-          className={`flex-1 flex items-center justify-center gap-1.5 sm:gap-2 rounded-full py-2 sm:py-2.5 px-3 sm:px-4 text-xs sm:text-sm font-extrabold transition active:scale-[0.99] ${
+          className={`flex-1 flex min-h-11 items-center justify-center gap-1.5 sm:gap-2 rounded-full py-2 sm:py-2.5 px-3 sm:px-4 text-xs sm:text-sm font-extrabold transition active:scale-[0.99] ${
             viewMode === "list"
               ? "bg-white text-slate-900 shadow-sm"
               : "text-slate-500 hover:text-slate-900"
@@ -386,7 +388,7 @@ export default function TransactionsList({
 
         <button
           onClick={() => setViewMode("grouped")}
-          className={`flex-1 flex items-center justify-center gap-1.5 sm:gap-2 rounded-full py-2 sm:py-2.5 px-3 sm:px-4 text-xs sm:text-sm font-extrabold transition active:scale-[0.99] ${
+          className={`flex-1 flex min-h-11 items-center justify-center gap-1.5 sm:gap-2 rounded-full py-2 sm:py-2.5 px-3 sm:px-4 text-xs sm:text-sm font-extrabold transition active:scale-[0.99] ${
             viewMode === "grouped"
               ? "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-sm font-black"
               : "text-slate-500 hover:text-slate-900"
@@ -406,9 +408,9 @@ export default function TransactionsList({
       {viewMode === "list" && (
         <div className="flex items-center justify-between rounded-2xl bg-blue-50/70 border border-blue-100/90 px-3.5 py-2 text-[11px] text-[#1656DB] font-semibold">
           <div className="flex items-center gap-2">
-            <span className="text-base shrink-0">👆</span>
+            <FinanceIcon name="moveHorizontal" className="h-4 w-4 shrink-0" />
             <span>
-              <strong>Guía táctil:</strong> Deslizá un movimiento a la <strong>derecha</strong> para marcar <span className="text-orange-600 font-black">Al Pedo 🔥</span>, o a la <strong>izquierda</strong> para editar/borrar.
+              <strong>Deslizá a la derecha</strong> para editar, o a la <strong>izquierda</strong> para marcar <span className="text-orange-600 font-black">Al Pedo</span> o borrar.
             </span>
           </div>
         </div>
@@ -417,9 +419,11 @@ export default function TransactionsList({
       {viewMode === "grouped" && (
         <div className="flex items-center justify-between rounded-2xl bg-cyan-50/70 border border-cyan-100/90 px-3.5 py-2 text-[11px] text-cyan-800 font-semibold">
           <div className="flex items-center gap-2">
-            <span className="text-base shrink-0">🏪</span>
+            <FinanceIcon name="store" className="h-4 w-4 shrink-0" />
             <span>
-              <strong>Guía de Comercios:</strong> Agrupa automáticamente tus gastos repetidos en Biggie, Bolt, súper y combustible para identificar fugas de dinero hormiga.
+              <strong>Guía de Comercios:</strong>{" "}
+              <span className="sm:hidden">Agrupamos gastos con el mismo nombre para ver en qué se va tu plata.</span>
+              <span className="hidden sm:inline">Agrupa automáticamente tus gastos repetidos en Biggie, Bolt, súper y combustible para identificar fugas de dinero hormiga.</span>
             </span>
           </div>
         </div>
@@ -481,10 +485,32 @@ export default function TransactionsList({
             </div>
           </div>
 
+          {/* Compact mobile filter disclosure; full controls remain visible on larger screens. */}
+          <button
+            type="button"
+            aria-expanded={showMobileFilters}
+            onClick={() => setShowMobileFilters((open) => !open)}
+            className="sm:hidden mt-3 flex min-h-11 w-full items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-bold text-slate-700"
+          >
+            <span className="flex items-center gap-2">
+              <Filter className="h-4 w-4 text-slate-500" />
+              Filtros y orden
+              {(() => {
+                const activeFilters = Number(filterType !== "all" || filterCategory !== "all") + Number(filterRecurring) + Number(amountFilter !== "all");
+                return activeFilters > 0 ? (
+                  <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-black text-blue-700">
+                    {activeFilters} activo{activeFilters > 1 ? "s" : ""}
+                  </span>
+                ) : null;
+              })()}
+            </span>
+            <span className="text-slate-400">{showMobileFilters ? "Ocultar" : "Mostrar"}</span>
+          </button>
+
           {/* Filter Chips & Sorting Control */}
-          <div className="space-y-2.5 py-3 border-b border-slate-100">
+          <div className={`${showMobileFilters ? "block" : "hidden"} sm:block space-y-2.5 py-3 border-b border-slate-100`}>
             {/* Row 1: Tipo & Categoría */}
-            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+            <div className="flex flex-wrap items-center gap-1.5 pb-0.5">
               <span className="text-[11px] text-slate-400 font-bold flex items-center gap-1 shrink-0 mr-0.5 uppercase tracking-wider">
                 <Filter className="h-3 w-3" />
                 Tipo:
@@ -495,7 +521,7 @@ export default function TransactionsList({
                   setFilterType("all");
                   setFilterCategory("all");
                 }}
-                className={`shrink-0 rounded-full px-3 py-1 text-xs font-extrabold transition active:scale-95 ${
+                className={`min-h-11 shrink-0 rounded-full px-3 py-2 text-xs font-extrabold transition active:scale-95 ${
                   filterType === "all" && filterCategory === "all"
                     ? "bg-slate-900 text-white shadow-sm"
                     : "bg-slate-100 text-slate-600 hover:bg-slate-200"
@@ -508,7 +534,7 @@ export default function TransactionsList({
                   setFilterType("income");
                   setFilterCategory("all");
                 }}
-                className={`shrink-0 rounded-full px-3 py-1 text-xs font-extrabold transition active:scale-95 ${
+                className={`min-h-11 shrink-0 rounded-full px-3 py-2 text-xs font-extrabold transition active:scale-95 ${
                   filterType === "income"
                     ? "bg-emerald-600 text-white shadow-sm"
                     : "bg-emerald-50 text-emerald-700 border border-emerald-200/80 hover:bg-emerald-100"
@@ -521,7 +547,7 @@ export default function TransactionsList({
                   setFilterType("expense");
                   setFilterCategory("all");
                 }}
-                className={`shrink-0 rounded-full px-3 py-1 text-xs font-extrabold transition active:scale-95 ${
+                className={`min-h-11 shrink-0 rounded-full px-3 py-2 text-xs font-extrabold transition active:scale-95 ${
                   filterType === "expense" && filterCategory !== "al_pedo"
                     ? "bg-rose-600 text-white shadow-sm"
                     : "bg-rose-50 text-rose-700 border border-rose-200/80 hover:bg-rose-100"
@@ -535,7 +561,7 @@ export default function TransactionsList({
                   setFilterType("expense");
                   setFilterCategory("al_pedo");
                 }}
-                className={`shrink-0 flex items-center gap-1 rounded-full px-3 py-1 text-xs font-black transition active:scale-95 ${
+                className={`min-h-11 shrink-0 flex items-center gap-1 rounded-full px-3 py-2 text-xs font-black transition active:scale-95 ${
                   filterCategory === "al_pedo"
                     ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/20"
                     : "bg-orange-50 text-orange-600 border border-orange-200/80 hover:bg-orange-100"
@@ -547,7 +573,7 @@ export default function TransactionsList({
 
               <button
                 onClick={() => setFilterRecurring(!filterRecurring)}
-                className={`shrink-0 flex items-center gap-1 rounded-full px-3 py-1 text-xs font-black transition active:scale-95 ${
+                className={`min-h-11 shrink-0 flex items-center gap-1 rounded-full px-3 py-2 text-xs font-black transition active:scale-95 ${
                   filterRecurring
                     ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/25"
                     : "bg-indigo-50 text-indigo-700 border border-indigo-200/80 hover:bg-indigo-100"
@@ -561,7 +587,7 @@ export default function TransactionsList({
             {/* Row 2: Impact Filters (Montos) & Ordenamiento */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               {/* Filtro Rápido de Impacto por Monto */}
-              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+              <div className="flex flex-wrap items-center gap-1.5 pb-0.5">
                 <span className="text-[11px] text-slate-400 font-bold flex items-center gap-1 shrink-0 mr-0.5 uppercase tracking-wider">
                   <Zap className="h-3 w-3 text-amber-500" />
                   Monto:
@@ -569,7 +595,7 @@ export default function TransactionsList({
 
                 <button
                   onClick={() => setAmountFilter("all")}
-                  className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold transition ${
+                  className={`min-h-11 shrink-0 rounded-full px-2.5 py-2 text-[11px] font-bold transition ${
                     amountFilter === "all"
                       ? "bg-slate-900 text-white"
                       : "bg-slate-100 text-slate-600 hover:bg-slate-200"
@@ -580,24 +606,24 @@ export default function TransactionsList({
 
                 <button
                   onClick={() => setAmountFilter("big")}
-                  className={`shrink-0 flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold transition ${
+                  className={`min-h-11 shrink-0 flex items-center gap-1 rounded-full px-2.5 py-2 text-[11px] font-bold transition ${
                     amountFilter === "big"
                       ? "bg-rose-600 text-white shadow-sm"
                       : "bg-rose-50 text-rose-700 border border-rose-200/70 hover:bg-rose-100"
                   }`}
                 >
-                  <span>🔥 Grandes (&gt;100k)</span>
+                  <span className="inline-flex items-center gap-1"><FinanceIcon name="flame" className="h-3.5 w-3.5" /> Grandes (&gt;100k)</span>
                 </button>
 
                 <button
                   onClick={() => setAmountFilter("ant")}
-                  className={`shrink-0 flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold transition ${
+                  className={`min-h-11 shrink-0 flex items-center gap-1 rounded-full px-2.5 py-2 text-[11px] font-bold transition ${
                     amountFilter === "ant"
                       ? "bg-amber-500 text-white shadow-sm"
                       : "bg-amber-50 text-amber-800 border border-amber-200/70 hover:bg-amber-100"
                   }`}
                 >
-                  <span>🐜 Hormiga (&lt;30k)</span>
+                  <span className="inline-flex items-center gap-1"><FinanceIcon name="bug" className="h-3.5 w-3.5" /> Hormiga (&lt;30k)</span>
                 </button>
               </div>
 
@@ -609,13 +635,13 @@ export default function TransactionsList({
                 </div>
                 <select
                   value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as any)}
-                  className="rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-bold text-slate-700 focus:border-blue-500 focus:bg-white focus:outline-none cursor-pointer"
+                  onChange={(e) => setSortBy(e.target.value as "date_desc" | "date_asc" | "amount_desc" | "amount_asc")}
+                  className="min-h-11 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2 text-[11px] font-bold text-slate-700 focus:border-blue-500 focus:bg-white focus:outline-none cursor-pointer"
                 >
-                  <option value="date_desc">📅 Más recientes</option>
-                  <option value="date_asc">📅 Más antiguos</option>
-                  <option value="amount_desc">💰 Mayor Monto</option>
-                  <option value="amount_asc">🪙 Menor Monto</option>
+                  <option value="date_desc">Más recientes</option>
+                  <option value="date_asc">Más antiguos</option>
+                  <option value="amount_desc">Mayor monto</option>
+                  <option value="amount_asc">Menor monto</option>
                 </select>
               </div>
             </div>
@@ -644,9 +670,6 @@ export default function TransactionsList({
           <div className="flex items-center justify-between px-1 text-[11px] text-slate-400 font-medium">
             <span>{sorted.length} movimiento(s)</span>
             <span className="hidden sm:inline">Tocar para ver opciones</span>
-            <span className="sm:hidden flex items-center gap-1 text-slate-400">
-              👈 Deslizá para borrar / Al Pedo 👉
-            </span>
           </div>
 
           {/* Transactions List with Native Swipe Gestures */}

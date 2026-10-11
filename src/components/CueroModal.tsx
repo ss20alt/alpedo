@@ -3,7 +3,7 @@
 import React, { useState, useRef } from "react";
 import {
   X,
-  Sparkles,
+  MessageCircle,
   Flame,
   ShoppingCart,
   ArrowRight,
@@ -15,6 +15,8 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { triggerHaptic } from "@/lib/haptics";
+import FinanceIcon from "@/components/FinanceIcon";
+import { getParaguayDateString } from "@/lib/date-utils";
 
 interface CueroModalProps {
   isOpen: boolean;
@@ -160,7 +162,7 @@ export default function CueroModal({
           category: result.financials.category,
           amount: result.financials.amount,
           description: result.financials.description || "Gasto consultado con el Kape",
-          date: new Date().toISOString().split("T")[0],
+          date: getParaguayDateString(),
           is_recurring: 0,
         }),
       });
@@ -211,7 +213,7 @@ export default function CueroModal({
               }
             : undefined
         }
-        className="w-full max-w-lg rounded-t-[32px] sm:rounded-[32px] border border-slate-100 bg-white p-5 sm:p-6 shadow-2xl max-h-[92vh] flex flex-col text-slate-900 animate-in fade-in slide-in-from-bottom-6 duration-200"
+        className="mobile-sheet-viewport-92 w-full max-w-lg rounded-t-[32px] sm:rounded-[32px] border border-slate-100 bg-white p-5 sm:p-6 shadow-2xl flex flex-col text-slate-900 animate-in fade-in slide-in-from-bottom-6 duration-200"
       >
         {/* Drag handle mobile */}
         <div
@@ -225,7 +227,7 @@ export default function CueroModal({
         <div className="flex items-center justify-between border-b border-slate-100 pb-3 shrink-0">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-50 border border-amber-200/80 text-amber-700 font-black text-2xl shadow-sm shrink-0">
-              🧉
+              <FinanceIcon name="brand" className="h-7 w-7 text-amber-700" />
             </div>
             <div>
               <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
@@ -378,7 +380,7 @@ export default function CueroModal({
                     }`}
                   >
                     <Flame className="h-4 w-4 text-orange-500" />
-                    <span>Gusto Al Pedo 🔥</span>
+                    <span>Gusto Al Pedo</span>
                   </button>
 
                   <button
@@ -394,7 +396,7 @@ export default function CueroModal({
                     }`}
                   >
                     <ShoppingCart className="h-4 w-4 text-[#1656DB]" />
-                    <span>Necesidad / Útil 🛒</span>
+                    <span>Necesidad / útil</span>
                   </button>
                 </div>
               </div>
@@ -408,11 +410,11 @@ export default function CueroModal({
                 {loading ? (
                   <>
                     <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                    <span>Consultando al Kape con IA...</span>
+                    <span>Consultando al Kape...</span>
                   </>
                 ) : (
                   <>
-                    <Sparkles className="h-4 w-4 text-emerald-300" />
+                    <MessageCircle className="h-4 w-4 text-emerald-300" />
                     <span>Consultar: ¿Me da el cuero?</span>
                   </>
                 )}
@@ -448,20 +450,20 @@ export default function CueroModal({
               <div className="rounded-[24px] border border-slate-200 bg-slate-50/80 p-4.5 relative">
                 <div className="flex items-center gap-2.5 mb-2.5 pb-2.5 border-b border-slate-200/80">
                   <div className="h-8 w-8 rounded-xl bg-amber-100 border border-amber-200 flex items-center justify-center text-sm shadow-xs">
-                    🧉
+                    <FinanceIcon name="brand" className="h-4 w-4 text-amber-700" />
                   </div>
                   <div>
                     <span className="text-xs font-black text-slate-900 block leading-tight">
                       El Kape Financiero
                     </span>
                     <span className="text-[10px] font-bold text-[#1656DB]">
-                      Veredicto con IA
+                      Recomendación financiera
                     </span>
                   </div>
                 </div>
 
                 <p className="text-xs sm:text-sm text-slate-700 leading-relaxed font-semibold italic">
-                  "{result.aiMessage}"
+                  &quot;{result.aiMessage}&quot;
                 </p>
               </div>
 

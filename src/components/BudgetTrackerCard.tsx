@@ -100,7 +100,7 @@ export default function BudgetTrackerCard({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-[11px] font-medium text-slate-400 mb-1">
-                🔥 Tope Gastos Al Pedo ({currencySymbol})
+                <span className="inline-flex items-center gap-1"><Flame className="h-3 w-3 text-orange-400" /> Tope Gastos Al Pedo ({currencySymbol})</span>
               </label>
               <input
                 type="number"
@@ -118,7 +118,7 @@ export default function BudgetTrackerCard({
 
             <div>
               <label className="block text-[11px] font-medium text-slate-400 mb-1">
-                🛒 Tope Gastos Variables ({currencySymbol})
+                <span className="inline-flex items-center gap-1"><ShoppingCart className="h-3 w-3 text-amber-400" /> Tope Gastos Variables ({currencySymbol})</span>
               </label>
               <input
                 type="number"
@@ -179,13 +179,7 @@ export default function BudgetTrackerCard({
               <span
                 className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold border ${alPedoGauge.badgeBg}`}
               >
-                <span>
-                  {alPedoGauge.status === "safe"
-                    ? "🟢"
-                    : alPedoGauge.status === "warning"
-                    ? "🟡"
-                    : "🔴"}
-                </span>
+                <span aria-hidden="true" className={`h-2 w-2 rounded-full ${alPedoGauge.status === "safe" ? "bg-emerald-500" : alPedoGauge.status === "warning" ? "bg-amber-500" : "bg-rose-500"}`} />
                 <span>{alPedoGauge.label}</span>
               </span>
             </div>
@@ -254,13 +248,7 @@ export default function BudgetTrackerCard({
               <span
                 className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold border ${variableGauge.badgeBg}`}
               >
-                <span>
-                  {variableGauge.status === "safe"
-                    ? "🟢"
-                    : variableGauge.status === "warning"
-                    ? "🟡"
-                    : "🔴"}
-                </span>
+                <span aria-hidden="true" className={`h-2 w-2 rounded-full ${variableGauge.status === "safe" ? "bg-emerald-500" : variableGauge.status === "warning" ? "bg-amber-500" : "bg-rose-500"}`} />
                 <span>{variableGauge.label}</span>
               </span>
             </div>

@@ -2,7 +2,7 @@
 
 import React from "react";
 import { FinancialHealth, FinancialMetrics } from "@/lib/finance-engine";
-import { Activity, ShieldCheck, AlertTriangle, ShieldAlert, Sparkles, TrendingUp } from "lucide-react";
+import { Activity, ShieldCheck, AlertTriangle, ShieldAlert, TrendingUp } from "lucide-react";
 
 interface HealthCardProps {
   metrics: FinancialMetrics;
@@ -15,7 +15,7 @@ export default function HealthCard({ metrics }: HealthCardProps) {
   const getIcon = (level: string) => {
     switch (level) {
       case "EXCELENTE":
-        return <Sparkles className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-400" />;
+        return <ShieldCheck className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-400" />;
       case "BUENA":
         return <ShieldCheck className="h-4 w-4 sm:h-5 sm:w-5 text-teal-400" />;
       case "AGUANTABLE":

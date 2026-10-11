@@ -9,9 +9,10 @@ const connectionString =
   process.env.DATABASE_URL ||
   "postgresql://alpedo_user:AlPedoPy2026_SecPass!@127.0.0.1:5432/alpedo_db";
 
+export type DbParameter = string | number | boolean | Date | Buffer | null | undefined;
+
 // Global pool instance to prevent connection leaks during Next.js hot-reloads
 declare global {
-  // eslint-disable-next-line no-var
   var __pgPool: Pool | undefined;
 }
 
@@ -31,7 +32,7 @@ if (process.env.NODE_ENV !== "production") {
 /**
  * Execute a query with automatic '?' to '$1, $2...' parameter conversion
  */
-export async function query<T = any>(sql: string, params: any[] = []): Promise<T[]> {
+export async function query<T = unknown>(sql: string, params: DbParameter[] = []): Promise<T[]> {
   let paramIdx = 1;
   const pgSql = sql.replace(/\?/g, () => `$${paramIdx++}`);
   const result = await pool.query(pgSql, params);
@@ -41,7 +42,7 @@ export async function query<T = any>(sql: string, params: any[] = []): Promise<T
 /**
  * Execute a query and return a single row or null
  */
-export async function queryOne<T = any>(sql: string, params: any[] = []): Promise<T | null> {
+export async function queryOne<T = unknown>(sql: string, params: DbParameter[] = []): Promise<T | null> {
   const rows = await query<T>(sql, params);
   return rows[0] || null;
 }
@@ -49,7 +50,7 @@ export async function queryOne<T = any>(sql: string, params: any[] = []): Promis
 /**
  * Execute a mutation query (INSERT, UPDATE, DELETE) and return affected rowCount
  */
-export async function execute(sql: string, params: any[] = []): Promise<number> {
+export async function execute(sql: string, params: DbParameter[] = []): Promise<number> {
   let paramIdx = 1;
   const pgSql = sql.replace(/\?/g, () => `$${paramIdx++}`);
   const result = await pool.query(pgSql, params);

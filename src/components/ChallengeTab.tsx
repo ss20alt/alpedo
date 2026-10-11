@@ -4,16 +4,14 @@ import React, { useState, useEffect } from "react";
 import {
   Flame,
   CheckCircle2,
-  Trophy,
   Share2,
   PiggyBank,
   TrendingUp,
-  Sparkles,
-  RotateCcw,
-  Calendar,
+  Lightbulb,
   Check,
-  Copy,
+  CircleAlert,
 } from "lucide-react";
+import { getParaguayMonthString } from "@/lib/date-utils";
 
 interface ChallengeTabProps {
   currencySymbol: string;
@@ -21,9 +19,15 @@ interface ChallengeTabProps {
 
 export default function ChallengeTab({ currencySymbol }: ChallengeTabProps) {
   const [salary, setSalary] = useState<number>(3044000);
-  const [startMonth, setStartMonth] = useState<string>("2026-10");
+  const [startMonth, setStartMonth] = useState<string>(getParaguayMonthString());
   const [completedMonths, setCompletedMonths] = useState<number[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [loadError, setLoadError] = useState("");
+  const [salaryDraft, setSalaryDraft] = useState("3044000");
+  const [startMonthDraft, setStartMonthDraft] = useState(getParaguayMonthString());
+  const [isSavingConfig, setIsSavingConfig] = useState(false);
+  const [savingMonthIndex, setSavingMonthIndex] = useState<number | null>(null);
+  const [notice, setNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
   const monthNames = [
@@ -32,86 +36,102 @@ export default function ChallengeTab({ currencySymbol }: ChallengeTabProps) {
   ];
 
   // Load challenge from API
-  useEffect(() => {
-    const fetchChallenge = async () => {
+  const fetchChallenge = async () => {
       try {
         setLoading(true);
+        setLoadError("");
         const res = await fetch("/api/challenge");
-        if (res.ok) {
-          const data = await res.json();
-          if (data.salary) setSalary(data.salary);
-          if (data.start_month) setStartMonth(data.start_month);
-          if (Array.isArray(data.completed_months)) setCompletedMonths(data.completed_months);
-        }
-      } catch {
-        // ignore
+        const data = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(data?.error || "No se pudo cargar el reto.");
+        setSalary(data.salary);
+        setSalaryDraft(String(data.salary));
+        setStartMonth(data.start_month);
+        setStartMonthDraft(data.start_month);
+        setCompletedMonths(Array.isArray(data.completed_months) ? data.completed_months : []);
+      } catch (error) {
+        setLoadError(error instanceof Error ? error.message : "No se pudo cargar el reto.");
       } finally {
         setLoading(false);
       }
     };
-    fetchChallenge();
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => void fetchChallenge(), 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
-  // Update salary or start month
-  const updateConfig = async (newSalary: number, newStartMonth: string) => {
-    setSalary(newSalary);
-    setStartMonth(newStartMonth);
+  // Save configuration only after the user finishes editing.
+  const saveConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const parsedSalary = Number(salaryDraft);
+    if (!Number.isFinite(parsedSalary) || parsedSalary <= 0) {
+      setNotice({ type: "error", text: "Ingresá un salario mensual mayor que cero." });
+      return;
+    }
+
     try {
-      await fetch("/api/challenge", {
+      setIsSavingConfig(true);
+      setNotice(null);
+      const res = await fetch("/api/challenge", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "update_config",
-          salary: newSalary,
-          start_month: newStartMonth,
-        }),
+        body: JSON.stringify({ action: "update_config", salary: parsedSalary, start_month: startMonthDraft }),
       });
-    } catch {
-      // ignore
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || "No se pudo guardar la configuración.");
+      setSalary(data.salary);
+      setSalaryDraft(String(data.salary));
+      setStartMonth(data.start_month);
+      setStartMonthDraft(data.start_month);
+      setNotice({ type: "success", text: "Configuración guardada." });
+    } catch (error) {
+      setNotice({ type: "error", text: error instanceof Error ? error.message : "No se pudo guardar. Probá de nuevo." });
+    } finally {
+      setIsSavingConfig(false);
     }
   };
 
-  // Toggle month completion
+  // Toggle month completion and reflect the server result only after it saves.
   const toggleMonth = async (monthIndex: number) => {
-    const isCompleted = completedMonths.includes(monthIndex);
-    const updated = isCompleted
-      ? completedMonths.filter((m) => m !== monthIndex)
-      : [...completedMonths, monthIndex].sort((a, b) => a - b);
-
-    setCompletedMonths(updated);
-
     try {
-      await fetch("/api/challenge", {
+      setSavingMonthIndex(monthIndex);
+      setNotice(null);
+      const res = await fetch("/api/challenge", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "toggle_month",
-          month_index: monthIndex,
-        }),
+        body: JSON.stringify({ action: "toggle_month", month_index: monthIndex }),
       });
-    } catch {
-      // ignore
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || "No se pudo actualizar este mes.");
+      setCompletedMonths(data.completed_months);
+      setNotice({ type: "success", text: data.completed_months.includes(monthIndex) ? "Mes marcado como cumplido." : "Se quitó la marca de este mes." });
+    } catch (error) {
+      setNotice({ type: "error", text: error instanceof Error ? error.message : "No se pudo guardar. Probá de nuevo." });
+    } finally {
+      setSavingMonthIndex(null);
     }
   };
 
-  const formatMoney = (val: number) => {
-    return Math.round(val).toLocaleString("es-PY");
-  };
+  const formatMoney = (val: number) => Math.round(val || 0).toLocaleString("es-PY");
+  const draftSalaryValue = Number(salaryDraft);
+  const previewSalary = Number.isFinite(draftSalaryValue) && draftSalaryValue > 0 ? draftSalaryValue : 0;
+  const previewStartMonth = /^\d{4}-(0[1-9]|1[0-2])$/.test(startMonthDraft) ? startMonthDraft : startMonth;
+  const hasConfigChanges = String(salary) !== salaryDraft || startMonth !== startMonthDraft;
 
   // Calculate 12-month sequence details
   const getChallengeMonths = () => {
-    const [startYearStr, startMonthStr] = startMonth.split("-");
-    const sYear = parseInt(startYearStr) || 2026;
-    const sMonth = (parseInt(startMonthStr) || 10) - 1; // 0-indexed
+    const [startYearStr, startMonthStr] = previewStartMonth.split("-");
+    const sYear = parseInt(startYearStr, 10) || new Date().getFullYear();
+    const sMonth = (parseInt(startMonthStr, 10) || new Date().getMonth() + 1) - 1; // 0-indexed
 
     const list = [];
     let runningTotal = 0;
 
     for (let i = 1; i <= 12; i++) {
-      const date = new Date(sYear, sMonth + (i - 1), 1);
-      const name = `${monthNames[date.getMonth()]} ${date.getFullYear()}`;
+      const date = new Date(Date.UTC(sYear, sMonth + (i - 1), 1));
+      const name = `${monthNames[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
       const percentage = i;
-      const amount = Math.round((salary * percentage) / 100);
+      const amount = Math.round((previewSalary * percentage) / 100);
       runningTotal += amount;
 
       list.push({
@@ -127,44 +147,62 @@ export default function ChallengeTab({ currencySymbol }: ChallengeTabProps) {
   };
 
   const challengeMonths = getChallengeMonths();
-
-  // Total saved so far
   const totalSavedSoFar = challengeMonths
     .filter((m) => m.isCompleted)
     .reduce((acc, m) => acc + m.amount, 0);
-
-  // Total potential at end of 12 months
   const totalPotentialSaved = challengeMonths[11]?.runningTotal || 0;
   const progressPercent = Math.round((completedMonths.length / 12) * 100);
 
-  // Share text generator for WhatsApp/Group
-  const copyShareText = (monthIndex: number, monthName: string, amount: number, percent: number) => {
-    const text = `🔥 ¡HECHO! Separé mi ${percent}% de ${monthName} (${currencySymbol} ${formatMoney(amount)}) para el Reto del 1%.\n¡El juego es la constancia! Mes ${monthIndex} cumplido 💪`;
-    navigator.clipboard.writeText(text);
-    setCopiedIndex(monthIndex);
-    setTimeout(() => setCopiedIndex(null), 2500);
+  const copyShareText = async (monthIndex: number, monthName: string, amount: number, percent: number) => {
+    const text = `¡Hecho! Separé mi ${percent}% de ${monthName} (${currencySymbol} ${formatMoney(amount)}) para el Reto del 1%.\nEl juego es la constancia. Mes ${monthIndex} cumplido.`;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedIndex(monthIndex);
+      setNotice({ type: "success", text: "Mensaje copiado; ya podés pegarlo en WhatsApp." });
+      window.setTimeout(() => setCopiedIndex((current) => current === monthIndex ? null : current), 2500);
+    } catch {
+      setNotice({ type: "error", text: "No se pudo copiar el mensaje. Revisá los permisos del navegador e intentá de nuevo." });
+    }
   };
 
   if (loading) {
     return (
-      <div className="flex h-64 items-center justify-center text-slate-500">
-        <div className="h-7 w-7 animate-spin rounded-full border-2 border-orange-500 border-t-transparent" />
+      <div className="flex min-h-56 items-center justify-center text-slate-500" role="status" aria-live="polite">
+        <div className="h-7 w-7 animate-spin rounded-full border-2 border-orange-500 border-t-transparent" aria-hidden="true" />
+        <span className="sr-only">Cargando reto de ahorro</span>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="mx-auto max-w-lg rounded-2xl border border-rose-200 bg-rose-50 p-5 text-center text-rose-900" role="alert">
+        <CircleAlert className="mx-auto mb-2 h-6 w-6" aria-hidden="true" />
+        <p className="text-sm font-semibold">{loadError}</p>
+        <button type="button" onClick={() => void fetchChallenge()} className="mt-3 min-h-11 rounded-xl bg-white px-4 text-sm font-bold text-rose-700 shadow-sm">Reintentar</button>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6">
+      <div className="space-y-4 pb-8 sm:space-y-6 sm:pb-12">
+      {notice && (
+        <div className={`flex items-start gap-2 rounded-2xl border p-3 text-sm font-semibold ${notice.type === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-rose-200 bg-rose-50 text-rose-800"}`} role="status" aria-live="polite">
+          {notice.type === "success" ? <Check className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" /> : <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />}
+          <span>{notice.text}</span>
+          <button type="button" onClick={() => setNotice(null)} className="ml-auto min-h-6 px-1 text-current/70" aria-label="Cerrar aviso">×</button>
+        </div>
+      )}
       {/* 1. Hero Banner */}
-      <div id="tour-challenge-card" className="relative overflow-hidden rounded-[28px] border border-orange-200/80 bg-gradient-to-br from-orange-50/70 via-white to-amber-50/80 p-5 sm:p-7 shadow-[0_4px_24px_rgba(249,115,22,0.06)] text-slate-900">
+      <div id="tour-challenge-card" className="relative overflow-hidden rounded-[24px] border border-orange-200/80 bg-gradient-to-br from-orange-50/70 via-white to-amber-50/80 p-4 text-slate-900 shadow-[0_4px_24px_rgba(249,115,22,0.06)] sm:rounded-[28px] sm:p-7">
         <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-5">
           <div className="space-y-2">
             <div className="inline-flex items-center gap-1.5 rounded-full bg-orange-100 border border-orange-200 px-3 py-1 text-xs font-black text-orange-700 uppercase tracking-widest shadow-sm">
-              <Flame className="h-4 w-4 text-orange-500 shrink-0 animate-pulse" />
-              <span>DESAFÍO EXCLUSIVO</span>
+              <Flame className="h-4 w-4 text-orange-500 shrink-0 " />
+              <span>RETO DE AHORRO</span>
             </div>
             <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-              🔥 ARRANCA EL RETO DEL 1% 🔥
+              Arranca el reto del 1%
             </h2>
             <p className="text-xs sm:text-sm text-slate-600 max-w-2xl leading-relaxed font-medium">
               La regla es una sola: <strong>cada vez que cobres</strong>, antes de gastar en cualquier cosa, separás tu porcentaje correspondiente.
@@ -172,7 +210,7 @@ export default function ChallengeTab({ currencySymbol }: ChallengeTabProps) {
             </p>
           </div>
 
-          <div className="rounded-2xl border border-orange-200 bg-white p-4 shrink-0 text-center sm:text-right shadow-sm">
+          <div className="shrink-0 rounded-2xl border border-orange-200 bg-white p-3 text-center shadow-sm sm:p-4 sm:text-right">
             <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">
               Total al Completar (12 Meses)
             </div>
@@ -180,29 +218,34 @@ export default function ChallengeTab({ currencySymbol }: ChallengeTabProps) {
               {currencySymbol} {formatMoney(totalPotentialSaved)}
             </div>
             <div className="text-[10px] text-slate-500 font-medium mt-1">
-              🎉 ¡78% de un sueldo completo ahorrado!
+              Al completar, habrás separado el 78% de un sueldo mensual
             </div>
           </div>
         </div>
 
         {/* Regla de Oro Callout */}
-        <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50/70 p-3.5 sm:p-4 text-xs text-amber-950 flex items-start gap-3">
-          <span className="text-base shrink-0">💡</span>
+        <div className="mt-4 flex items-start gap-2.5 rounded-2xl border border-amber-200 bg-amber-50/70 p-3 text-xs text-amber-950 sm:mt-5 sm:gap-3 sm:p-4">
+          <Lightbulb className="h-5 w-5 shrink-0 text-amber-600" />
           <div className="leading-relaxed font-medium">
             <strong className="text-amber-900 font-bold">Regla de oro:</strong> Separalo en una cuenta aparte, un sobre o una billetera digital (Ueno, Vaquita, Mango, etc.). 
             <span className="text-orange-700 font-bold"> Que no se mezcle con la plata del día a día.</span>
           </div>
         </div>
 
+        <div className="mt-4 rounded-xl border border-orange-100 bg-white/75 p-3 text-xs text-slate-600 sm:hidden">
+          <span className="font-black text-orange-700">1% → 12%</span>
+          <span className="ml-2">Subí un punto por mes y marcá el ahorro cuando lo separes.</span>
+        </div>
+
         {/* 3-Step Interactive Methodology */}
-        <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+        <div className="mt-4 hidden grid-cols-1 gap-2.5 sm:grid sm:grid-cols-3">
           <div className="rounded-xl bg-white/75 border border-orange-100 p-2.5">
             <div className="text-[11px] font-black text-orange-700">Paso 1: Inicio Sin Fricción</div>
-            <div className="text-[10px] text-slate-500 mt-0.5">El mes 1 solo apartás 1% (ej: ₲ 30.000). Ni lo sentís en el bolsillo.</div>
+            <div className="text-[10px] text-slate-500 mt-0.5">El primer mes apartás 1% (ej.: {currencySymbol} {formatMoney(Math.round(previewSalary / 100))}). Empezá con un monto llevadero.</div>
           </div>
-          <div className="rounded-xl bg-white/75 border border-orange-100 p-2.5">
+          <div className="rounded-xl border border-orange-100 bg-white/75 p-2.5">
             <div className="text-[11px] font-black text-orange-700">Paso 2: Hábito Imparable</div>
-            <div className="text-[10px] text-slate-500 mt-0.5">Cada mes sube +1%. Tu mente se acostumbra a vivir con 95% y ahorrar el resto.</div>
+            <div className="mt-0.5 text-[10px] text-slate-500">Cada mes subís un punto porcentual, de forma gradual y sostenida.</div>
           </div>
           <div className="rounded-xl bg-white/75 border border-orange-100 p-2.5">
             <div className="text-[11px] font-black text-orange-700">Paso 3: Victoria al Mes 12</div>
@@ -212,8 +255,8 @@ export default function ChallengeTab({ currencySymbol }: ChallengeTabProps) {
       </div>
 
       {/* 2. Configurador de Salario & Mes de Inicio */}
-      <div className="rounded-[28px] border border-slate-100 bg-white p-4 sm:p-6 shadow-[0_4px_24px_rgba(0,0,0,0.03)] text-slate-900">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+      <form onSubmit={saveConfig} className="rounded-[24px] border border-slate-100 bg-white p-4 text-slate-900 shadow-[0_4px_24px_rgba(0,0,0,0.03)] sm:rounded-[28px] sm:p-6">
+        <div className="flex flex-col gap-3 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <div>
             <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
               <PiggyBank className="h-5 w-5 text-emerald-600 shrink-0" />
@@ -225,20 +268,21 @@ export default function ChallengeTab({ currencySymbol }: ChallengeTabProps) {
           </div>
 
           {/* Month selector */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500 font-bold">Mes de inicio:</span>
+          <div className="flex w-full flex-col gap-1.5 sm:w-auto sm:flex-row sm:items-center sm:gap-2">
+            <label htmlFor="challenge-start-month" className="text-xs font-bold text-slate-600">Mes de inicio</label>
             <input
+              id="challenge-start-month"
               type="month"
-              value={startMonth}
-              onChange={(e) => updateConfig(salary, e.target.value)}
-              className="h-10 rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs text-slate-900 font-semibold focus:bg-white focus:border-blue-500 focus:outline-none transition"
+              value={startMonthDraft}
+              onChange={(e) => setStartMonthDraft(e.target.value)}
+              className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-900 transition focus:border-blue-500 focus:bg-white focus:outline-none sm:w-auto"
             />
           </div>
         </div>
 
         <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
           <div>
-            <label className="block text-[11px] font-black uppercase tracking-wider text-slate-400 mb-1.5">
+            <label htmlFor="challenge-salary" className="mb-1.5 block text-[11px] font-black uppercase tracking-wider text-slate-500">
               Tu Salario Mensual ({currencySymbol})
             </label>
             <div className="relative">
@@ -247,12 +291,13 @@ export default function ChallengeTab({ currencySymbol }: ChallengeTabProps) {
               </span>
               <input
                 type="number"
-                min="0"
-                step="any"
+                id="challenge-salary"
+                min="1"
+                step="1"
                 inputMode="numeric"
-                value={salary || ""}
-                onChange={(e) => updateConfig(Math.max(0, parseFloat(e.target.value) || 0), startMonth)}
-                className="w-full h-12 rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 text-lg font-black text-slate-900 font-mono focus:bg-white focus:border-blue-500 focus:outline-none transition"
+                value={salaryDraft}
+                onChange={(e) => setSalaryDraft(e.target.value)}
+                className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 font-mono text-lg font-black text-slate-900 transition focus:border-blue-500 focus:bg-white focus:outline-none"
               />
             </div>
           </div>
@@ -261,7 +306,7 @@ export default function ChallengeTab({ currencySymbol }: ChallengeTabProps) {
             <label className="block text-[11px] font-black uppercase tracking-wider text-slate-400 mb-1.5">
               Valores Rápidos en Paraguay
             </label>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-2">
               {[
                 { label: "Mínimo (₲ 3.044.000)", val: 3044000 },
                 { label: "₲ 4M", val: 4000000 },
@@ -272,9 +317,10 @@ export default function ChallengeTab({ currencySymbol }: ChallengeTabProps) {
                 <button
                   key={item.val}
                   type="button"
-                  onClick={() => updateConfig(item.val, startMonth)}
-                  className={`rounded-xl px-2.5 py-2 text-xs font-mono font-bold transition active:scale-95 ${
-                    salary === item.val
+                  onClick={() => setSalaryDraft(String(item.val))}
+                  aria-pressed={Number(salaryDraft) === item.val}
+                  className={`min-h-11 rounded-xl px-3 text-xs font-mono font-bold transition active:scale-95 ${
+                    Number(salaryDraft) === item.val
                       ? "bg-slate-900 text-white font-black shadow-sm"
                       : "bg-slate-100 text-slate-700 hover:bg-slate-200"
                   }`}
@@ -285,29 +331,35 @@ export default function ChallengeTab({ currencySymbol }: ChallengeTabProps) {
             </div>
           </div>
         </div>
-      </div>
+        <button type="submit" disabled={isSavingConfig || !hasConfigChanges} className="mt-4 min-h-12 w-full rounded-xl bg-blue-600 px-4 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-default disabled:opacity-60 sm:w-auto sm:min-w-48">
+          {isSavingConfig ? "Guardando…" : hasConfigChanges ? "Guardar configuración" : "Configuración guardada"}
+        </button>
+        <p className="mt-2 text-xs text-slate-500">
+          {hasConfigChanges ? "El plan muestra una vista previa. Guardá para conservar los cambios." : "El plan usa tu sueldo y mes de inicio guardados."}
+        </p>
+      </form>
 
       {/* 3. Panel de Progreso del Reto */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-4">
         {/* Guardado hasta hoy */}
-        <div className="rounded-[24px] border border-emerald-200/80 bg-emerald-50/60 p-4 sm:p-5 shadow-sm flex flex-col justify-between text-slate-900">
+        <div className="flex min-w-0 flex-col justify-between rounded-[22px] border border-emerald-200/80 bg-emerald-50/60 p-3 text-slate-900 shadow-sm sm:rounded-[24px] sm:p-5">
           <div>
             <span className="text-[11px] font-black uppercase tracking-wider text-emerald-700">
-              Ahorrado Hasta Hoy
+              Aportes marcados
             </span>
-            <div className="mt-1 text-2xl font-black text-emerald-700 font-mono">
+            <div className="mt-1 break-all font-mono text-lg font-black text-emerald-700 sm:text-2xl">
               {currencySymbol} {formatMoney(totalSavedSoFar)}
             </div>
           </div>
           <div className="mt-3 text-[11px] text-slate-500 font-medium">
             {completedMonths.length === 0
-              ? "Separás tu primer 1% este mes para arrancar."
-              : `¡Excelente! Cumpliste ${completedMonths.length} de 12 meses.`}
+              ? "Marcá cada aporte después de separarlo."
+              : `Suma de los ${completedMonths.length} meses marcados.`}
           </div>
         </div>
 
         {/* Porcentaje Cumplido */}
-        <div className="rounded-[24px] border border-slate-100 bg-white p-4 sm:p-5 shadow-sm flex flex-col justify-between text-slate-900">
+        <div className="flex min-w-0 flex-col justify-between rounded-[22px] border border-slate-100 bg-white p-3 text-slate-900 shadow-sm sm:rounded-[24px] sm:p-5">
           <div>
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">
@@ -317,7 +369,7 @@ export default function ChallengeTab({ currencySymbol }: ChallengeTabProps) {
                 {progressPercent}%
               </span>
             </div>
-            <div className="mt-2 text-2xl font-black text-slate-900 font-mono">
+            <div className="mt-2 text-xl font-black text-slate-900 font-mono sm:text-2xl">
               {completedMonths.length} / 12 <span className="text-xs text-slate-400 font-medium">meses</span>
             </div>
           </div>
@@ -327,18 +379,23 @@ export default function ChallengeTab({ currencySymbol }: ChallengeTabProps) {
               <div
                 className="h-full bg-gradient-to-r from-orange-500 to-emerald-500 transition-all duration-500"
                 style={{ width: `${progressPercent}%` }}
+                  role="progressbar"
+                  aria-label="Progreso del reto de ahorro"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={progressPercent}
               />
             </div>
           </div>
         </div>
 
         {/* Meta Acumulada Anual */}
-        <div className="rounded-[24px] border border-slate-100 bg-white p-4 sm:p-5 shadow-sm flex flex-col justify-between text-slate-900">
+        <div className="col-span-2 flex min-w-0 flex-col justify-between rounded-[22px] border border-slate-100 bg-white p-3 text-slate-900 shadow-sm sm:col-span-1 sm:rounded-[24px] sm:p-5">
           <div>
             <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">
               Meta al Mes 12
             </span>
-            <div className="mt-1 text-2xl font-black text-slate-900 font-mono">
+            <div className="mt-1 break-words text-xl font-black text-slate-900 font-mono sm:text-2xl">
               {currencySymbol} {formatMoney(totalPotentialSaved)}
             </div>
           </div>
@@ -436,7 +493,10 @@ export default function ChallengeTab({ currencySymbol }: ChallengeTabProps) {
                 <button
                   type="button"
                   onClick={() => toggleMonth(m.index)}
-                  className={`flex-1 h-11 flex items-center justify-center gap-2 rounded-xl text-xs font-black transition active:scale-95 ${
+                  disabled={savingMonthIndex !== null}
+                  aria-label={m.isCompleted ? `Quitar marca de ${m.monthName}` : `Marcar ${m.monthName} como cumplido`}
+                  aria-pressed={m.isCompleted}
+                  className={`flex h-11 flex-1 items-center justify-center gap-2 rounded-xl text-xs font-black transition active:scale-95 disabled:cursor-wait disabled:opacity-60 ${
                     m.isCompleted
                       ? "bg-emerald-600 text-white shadow-md shadow-emerald-500/20"
                       : "bg-slate-900 hover:bg-slate-800 text-white"
@@ -445,12 +505,12 @@ export default function ChallengeTab({ currencySymbol }: ChallengeTabProps) {
                   {m.isCompleted ? (
                     <>
                       <Check className="h-4 w-4 stroke-[3]" />
-                      <span>¡HECHO! 🎉</span>
+                      <span>{savingMonthIndex === m.index ? "Guardando…" : "Hecho"}</span>
                     </>
                   ) : (
                     <>
                       <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                      <span>Marcar HECHO 💪</span>
+                      <span>{savingMonthIndex === m.index ? "Guardando…" : "Marcar hecho"}</span>
                     </>
                   )}
                 </button>
@@ -460,7 +520,8 @@ export default function ChallengeTab({ currencySymbol }: ChallengeTabProps) {
                   type="button"
                   onClick={() => copyShareText(m.index, m.monthName, m.amount, m.percentage)}
                   className="h-11 w-11 flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition active:scale-95 shrink-0"
-                  title="Copiar compromiso para el grupo"
+                  aria-label={`Copiar mensaje del mes ${m.index}, ${m.monthName}`}
+                  disabled={savingMonthIndex !== null}
                 >
                   {copiedIndex === m.index ? (
                     <Check className="h-4 w-4 text-emerald-600" />
@@ -471,7 +532,7 @@ export default function ChallengeTab({ currencySymbol }: ChallengeTabProps) {
               </div>
 
               {copiedIndex === m.index && (
-                <div className="text-[10px] text-center text-emerald-600 font-bold mt-1">
+                <div className="mt-1 text-center text-[10px] font-bold text-emerald-700" role="status" aria-live="polite">
                   ¡Copiado para el grupo! Pegalo en WhatsApp.
                 </div>
               )}

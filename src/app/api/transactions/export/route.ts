@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
+import { getParaguayDateString } from "@/lib/date-utils";
 import db from "@/lib/db";
-import { checkAuth } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth";
 
 interface TransactionRow {
   date: string;
@@ -12,15 +13,17 @@ interface TransactionRow {
 }
 
 export async function GET() {
-  if (!(await checkAuth())) {
+  const user = await getCurrentUser();
+  if (!user) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
   const rows = await db.query<TransactionRow>(`
     SELECT date, type, category, amount, description, is_recurring
     FROM transactions
+    WHERE user_id = ? OR (user_id IS NULL AND ? = 1)
     ORDER BY date DESC, created_at DESC
-  `);
+  `, [user.id, user.id]);
 
   // Build CSV with UTF-8 BOM for Microsoft Excel compatibility
   const BOM = "\uFEFF";
@@ -52,7 +55,7 @@ export async function GET() {
   }
 
   const csvContent = BOM + csvRows.join("\r\n");
-  const today = new Date().toISOString().split("T")[0];
+  const today = getParaguayDateString();
 
   return new NextResponse(csvContent, {
     headers: {

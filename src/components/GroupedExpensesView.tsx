@@ -7,24 +7,24 @@ import {
   Flame,
   ChevronDown,
   ChevronUp,
-  Tag,
   TrendingDown,
   Calendar,
   Edit2,
   Trash2,
   Layers,
   ArrowUpDown,
-  Sparkles,
-  ShoppingBag,
+  Store,
   Zap,
+  X,
 } from "lucide-react";
+import FinanceIcon from "@/components/FinanceIcon";
+import { formatParaguayDateLabel } from "@/lib/date-utils";
 
 interface GroupedExpensesViewProps {
   transactions: Transaction[];
   currencySymbol: string;
   onEdit: (tx: Transaction) => void;
   onDelete: (id: string) => void;
-  onAddNewWithConcept?: (concept: string) => void;
   privacyMode?: boolean;
 }
 
@@ -49,7 +49,6 @@ export default function GroupedExpensesView({
   currencySymbol,
   onEdit,
   onDelete,
-  onAddNewWithConcept,
   privacyMode = false,
 }: GroupedExpensesViewProps) {
   const [search, setSearch] = useState("");
@@ -66,11 +65,6 @@ export default function GroupedExpensesView({
   const expenseTransactions = useMemo(() => {
     return transactions.filter((t) => t.type === "expense");
   }, [transactions]);
-
-  // Total expenses amount for percentage calculations
-  const totalExpensesSum = useMemo(() => {
-    return expenseTransactions.reduce((acc, t) => acc + t.amount, 0);
-  }, [expenseTransactions]);
 
   // Group expenses by normalized description
   const groups: ExpenseGroup[] = useMemo(() => {
@@ -137,52 +131,81 @@ export default function GroupedExpensesView({
     return list;
   }, [expenseTransactions]);
 
-  // Top summary stats
-  const topStats = useMemo(() => {
-    if (groups.length === 0) return null;
-    const sortedByTotal = [...groups].sort((a, b) => b.totalAmount - a.totalAmount);
-    const sortedByFreq = [...groups].sort((a, b) => b.count - a.count);
-    const totalAlPedoGroups = groups.filter((g) => g.categoriesCount.al_pedo > 0);
-    const sumAlPedo = groups.reduce((acc, g) => {
-      const alPedoTx = g.transactions.filter((t) => t.category === "al_pedo");
-      return acc + alPedoTx.reduce((s, t) => s + t.amount, 0);
-    }, 0);
-
-    return {
-      topSpent: sortedByTotal[0],
-      topFreq: sortedByFreq[0],
-      totalConcepts: groups.length,
-      alPedoCount: totalAlPedoGroups.length,
-      alPedoTotal: sumAlPedo,
-    };
-  }, [groups]);
-
   // Common quick chips for Paraguay
   const commonSuggestions = ["Bolt", "Biggie", "Jaha", "Superseis", "Stock", "PedidosYa", "Nafta"];
 
   // Filter and sort groups
   const filteredGroups = useMemo(() => {
-    let result = groups.filter((g) => {
-      if (filterCategory !== "all") {
-        if (filterCategory === "al_pedo" && g.categoriesCount.al_pedo === 0) return false;
-        if (filterCategory === "variable" && g.categoriesCount.variable === 0) return false;
-        if (filterCategory === "fijo" && g.categoriesCount.fijo === 0) return false;
-      }
-      if (search.trim() && !g.name.toLowerCase().includes(search.toLowerCase())) {
-        return false;
-      }
-      return true;
+    const result = groups.flatMap((group) => {
+      if (search.trim() && !group.name.toLowerCase().includes(search.toLowerCase())) return [];
+
+      const matchingTransactions = filterCategory === "all"
+        ? group.transactions
+        : group.transactions.filter((tx) => tx.category === filterCategory);
+      if (matchingTransactions.length === 0) return [];
+
+      if (filterCategory === "all") return [group];
+
+      const totalAmount = matchingTransactions.reduce((sum, tx) => sum + tx.amount, 0);
+      const categoriesCount = { fijo: 0, variable: 0, al_pedo: 0 };
+      matchingTransactions.forEach((tx) => {
+        if (tx.category === "fijo" || tx.category === "variable" || tx.category === "al_pedo") {
+          categoriesCount[tx.category] += 1;
+        }
+      });
+
+      return [{
+        ...group,
+        transactions: matchingTransactions,
+        count: matchingTransactions.length,
+        totalAmount,
+        average: Math.round(totalAmount / matchingTransactions.length),
+        categoriesCount,
+        dominantCategory: filterCategory as "fijo" | "variable" | "al_pedo",
+      }];
     });
 
     result.sort((a, b) => {
-      if (sortBy === "total") return b.totalAmount - a.totalAmount;
-      if (sortBy === "frequency") return b.count - a.count;
+      if (sortBy === "total") {
+        return b.totalAmount - a.totalAmount || b.count - a.count || a.name.localeCompare(b.name);
+      }
+      if (sortBy === "frequency") {
+        return b.count - a.count || b.totalAmount - a.totalAmount || a.name.localeCompare(b.name);
+      }
       if (sortBy === "name") return a.name.localeCompare(b.name);
       return 0;
     });
 
     return result;
   }, [groups, search, sortBy, filterCategory]);
+
+  // Keep insights and percentages aligned with the visible scope.
+  const scopedTopStats = useMemo(() => {
+    if (filteredGroups.length === 0) return null;
+    const sortedByTotal = [...filteredGroups].sort((a, b) => b.totalAmount - a.totalAmount);
+    const sortedByFreq = [...filteredGroups].sort((a, b) => b.count - a.count);
+    const alPedoGroups = filteredGroups.filter((group) => group.categoriesCount.al_pedo > 0);
+    const alPedoTotal = filteredGroups.reduce(
+      (sum, group) => sum + group.transactions
+        .filter((tx) => tx.category === "al_pedo")
+        .reduce((groupSum, tx) => groupSum + tx.amount, 0),
+      0
+    );
+
+    return {
+      topSpent: sortedByTotal[0],
+      topFreq: sortedByFreq[0],
+      totalConcepts: filteredGroups.length,
+      alPedoCount: alPedoGroups.length,
+      alPedoTotal,
+    };
+  }, [filteredGroups]);
+
+  // Search changes the visible concepts, while the percentage stays relative
+  // to all expenses in the selected category for a useful comparison.
+  const percentageBaseTotal = useMemo(() => expenseTransactions
+    .filter((tx) => filterCategory === "all" || tx.category === filterCategory)
+    .reduce((sum, tx) => sum + tx.amount, 0), [expenseTransactions, filterCategory]);
 
   const toggleExpand = (key: string) => {
     setExpandedGroups((prev) => ({
@@ -196,13 +219,13 @@ export default function GroupedExpensesView({
       case "fijo":
         return (
           <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-700 border border-slate-200">
-            🏠 Fijo
+            <><FinanceIcon name="home" className="h-3 w-3" /> Fijo</>
           </span>
         );
       case "variable":
         return (
           <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700 border border-amber-200/80">
-            🛒 Variable
+            <><FinanceIcon name="cart" className="h-3 w-3" /> Variable</>
           </span>
         );
       case "al_pedo":
@@ -220,15 +243,33 @@ export default function GroupedExpensesView({
   return (
     <div className="space-y-4">
       {/* Top Insights Strip (if there are groups) */}
-      {topStats && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+      {scopedTopStats && (
+        <>
+        <div className="sm:hidden flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white px-3.5 py-3 shadow-sm text-slate-900">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-slate-400">
+              <Layers className="h-3.5 w-3.5 text-emerald-600" />
+              {scopedTopStats.totalConcepts} conceptos
+            </div>
+            <div className="mt-1 truncate text-xs font-bold text-slate-700">
+              {scopedTopStats.topSpent ? `Mayor gasto · ${scopedTopStats.topSpent.name}` : "Sin resultados"}
+            </div>
+          </div>
+          {scopedTopStats.topSpent && (
+            <div className="shrink-0 text-right font-mono text-sm font-black text-rose-600">
+              {currencySymbol} {formatMoney(scopedTopStats.topSpent.totalAmount)}
+            </div>
+          )}
+        </div>
+
+        <div className="hidden sm:grid grid-cols-2 sm:grid-cols-4 gap-2.5">
           <div className="rounded-2xl border border-slate-100 bg-white p-3 sm:p-4 shadow-sm text-slate-900">
             <div className="flex items-center gap-1.5 text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-wider">
               <Layers className="h-3.5 w-3.5 text-emerald-600" />
               <span>Conceptos</span>
             </div>
             <div className="mt-1 text-lg sm:text-2xl font-black text-slate-900 font-mono">
-              {topStats.totalConcepts}
+              {scopedTopStats.totalConcepts}
             </div>
             <div className="text-[10px] text-slate-400 font-medium mt-0.5">Comercios / gastos únicos</div>
           </div>
@@ -239,10 +280,10 @@ export default function GroupedExpensesView({
               <span>Mayor Gasto</span>
             </div>
             <div className="mt-1 text-sm sm:text-base font-extrabold text-slate-900 truncate">
-              {topStats.topSpent.name}
+              {scopedTopStats.topSpent.name}
             </div>
             <div className="text-[11px] sm:text-xs font-black text-rose-600 font-mono">
-              {currencySymbol} {formatMoney(topStats.topSpent.totalAmount)}
+              {currencySymbol} {formatMoney(scopedTopStats.topSpent.totalAmount)}
             </div>
           </div>
 
@@ -252,10 +293,10 @@ export default function GroupedExpensesView({
               <span>Más Frecuente</span>
             </div>
             <div className="mt-1 text-sm sm:text-base font-extrabold text-slate-900 truncate">
-              {topStats.topFreq.name}
+              {scopedTopStats.topFreq.name}
             </div>
             <div className="text-[11px] sm:text-xs font-black text-amber-700 font-mono">
-              {topStats.topFreq.count} veces ({currencySymbol} {formatMoney(topStats.topFreq.average)}/vez)
+              {scopedTopStats.topFreq.count} veces ({currencySymbol} {formatMoney(scopedTopStats.topFreq.average)}/vez)
             </div>
           </div>
 
@@ -265,13 +306,14 @@ export default function GroupedExpensesView({
               <span>Gastos Al Pedo</span>
             </div>
             <div className="mt-1 text-sm sm:text-base font-extrabold text-orange-950 truncate">
-              {topStats.alPedoCount} conceptos
+              {scopedTopStats.alPedoCount} conceptos
             </div>
             <div className="text-[11px] sm:text-xs font-black text-orange-600 font-mono">
-              {currencySymbol} {formatMoney(topStats.alPedoTotal)}
+              {currencySymbol} {formatMoney(scopedTopStats.alPedoTotal)}
             </div>
           </div>
         </div>
+        </>
       )}
 
       {/* Main Filter & Search Card */}
@@ -282,7 +324,7 @@ export default function GroupedExpensesView({
               <Layers className="h-5 w-5 text-emerald-600 shrink-0" />
               <span>Gastos Agrupados por Concepto</span>
             </h2>
-            <p className="text-[11px] sm:text-xs text-slate-500 font-medium mt-0.5">
+            <p className="hidden sm:block text-[11px] sm:text-xs text-slate-500 font-medium mt-0.5">
               Acumula automáticamente todo lo gastado bajo el mismo nombre (ej: <strong>Bolt</strong>, <strong>Biggie</strong>, <strong>Jaha</strong>, <strong>Superseis</strong>).
             </p>
           </div>
@@ -295,6 +337,9 @@ export default function GroupedExpensesView({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar (ej: Bolt, Biggie...)"
+              aria-label="Buscar gastos por comercio o concepto"
+              autoComplete="off"
+              enterKeyHint="search"
               className="w-full h-10 rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 text-xs text-slate-900 placeholder-slate-400 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 font-semibold focus:outline-none transition"
             />
           </div>
@@ -303,14 +348,15 @@ export default function GroupedExpensesView({
         {/* Quick Suggestion Chips */}
         <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-3 pb-1">
           <span className="text-[10px] text-slate-400 font-black uppercase tracking-wider shrink-0 mr-1 flex items-center gap-1">
-            <Sparkles className="h-3 w-3 text-emerald-600" />
+            <Store className="h-3 w-3 text-emerald-600" />
             Ejemplos:
           </span>
           {commonSuggestions.map((sug) => (
             <button
               key={sug}
               onClick={() => setSearch(search === sug ? "" : sug)}
-              className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold transition active:scale-95 ${
+              aria-pressed={search.toLowerCase() === sug.toLowerCase()}
+              className={`min-h-10 shrink-0 rounded-full px-3 py-1.5 text-xs font-bold transition active:scale-95 ${
                 search.toLowerCase() === sug.toLowerCase()
                   ? "bg-slate-900 text-white shadow-sm"
                   : "bg-slate-100 text-slate-600 hover:bg-slate-200"
@@ -322,9 +368,10 @@ export default function GroupedExpensesView({
           {search && (
             <button
               onClick={() => setSearch("")}
-              className="shrink-0 text-xs text-rose-600 font-bold hover:underline px-1"
+              aria-label="Limpiar búsqueda"
+              className="min-h-10 shrink-0 inline-flex items-center gap-1 text-xs text-rose-600 font-bold hover:underline px-2"
             >
-              ✕ Limpiar
+              <X className="h-3.5 w-3.5" /> Limpiar
             </button>
           )}
         </div>
@@ -332,10 +379,11 @@ export default function GroupedExpensesView({
         {/* Filters and Sorting Bar */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-slate-100 mt-2">
           {/* Category Filter Chips */}
-          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
+          <div role="group" aria-label="Filtrar gastos por categoría" className="flex flex-wrap items-center gap-1.5 py-1">
             <button
               onClick={() => setFilterCategory("all")}
-              className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-extrabold transition active:scale-95 ${
+              aria-pressed={filterCategory === "all"}
+              className={`min-h-10 shrink-0 rounded-full px-3 py-1.5 text-xs font-extrabold transition active:scale-95 ${
                 filterCategory === "all"
                   ? "bg-slate-900 text-white shadow-sm"
                   : "bg-slate-100 text-slate-600 hover:bg-slate-200"
@@ -345,7 +393,8 @@ export default function GroupedExpensesView({
             </button>
             <button
               onClick={() => setFilterCategory("al_pedo")}
-              className={`shrink-0 flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-black transition active:scale-95 ${
+              aria-pressed={filterCategory === "al_pedo"}
+              className={`min-h-10 shrink-0 flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-black transition active:scale-95 ${
                 filterCategory === "al_pedo"
                   ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/20"
                   : "bg-orange-50 text-orange-600 border border-orange-200 hover:bg-orange-100"
@@ -356,7 +405,8 @@ export default function GroupedExpensesView({
             </button>
             <button
               onClick={() => setFilterCategory("variable")}
-              className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-bold transition active:scale-95 ${
+              aria-pressed={filterCategory === "variable"}
+              className={`min-h-10 shrink-0 rounded-full px-3 py-1.5 text-xs font-bold transition active:scale-95 ${
                 filterCategory === "variable"
                   ? "bg-amber-600 text-white shadow-sm"
                   : "bg-amber-50 text-amber-700 border border-amber-200/80 hover:bg-amber-100"
@@ -366,7 +416,8 @@ export default function GroupedExpensesView({
             </button>
             <button
               onClick={() => setFilterCategory("fijo")}
-              className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-bold transition active:scale-95 ${
+              aria-pressed={filterCategory === "fijo"}
+              className={`min-h-10 shrink-0 rounded-full px-3 py-1.5 text-xs font-bold transition active:scale-95 ${
                 filterCategory === "fijo"
                   ? "bg-slate-800 text-white shadow-sm"
                   : "bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200"
@@ -377,15 +428,16 @@ export default function GroupedExpensesView({
           </div>
 
           {/* Sort Selector */}
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1">
+          <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto sm:shrink-0">
+            <label htmlFor="grouped-expenses-sort" className="shrink-0 text-[11px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1">
               <ArrowUpDown className="h-3.5 w-3.5" />
               Ordenar:
-            </span>
+            </label>
             <select
+              id="grouped-expenses-sort"
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as any)}
-              className="h-8 rounded-xl border border-slate-200 bg-slate-50 px-2 text-xs font-bold text-slate-700 focus:border-blue-500 focus:bg-white focus:outline-none cursor-pointer"
+              onChange={(e) => setSortBy(e.target.value as "total" | "frequency" | "name")}
+              className="min-h-11 min-w-0 flex-1 sm:flex-none rounded-xl border border-slate-200 bg-slate-50 px-2 text-xs font-bold text-slate-700 focus:border-blue-500 focus:bg-white focus:outline-none cursor-pointer"
             >
               <option value="total">Mayor Monto Total (₲)</option>
               <option value="frequency">Más Frecuente (Veces)</option>
@@ -400,18 +452,29 @@ export default function GroupedExpensesView({
         <div className="rounded-[28px] border border-slate-100 bg-white p-12 text-center shadow-sm">
           <Layers className="h-10 w-10 text-slate-300 mx-auto mb-3" />
           <p className="text-sm font-bold text-slate-900">
-            No se encontraron gastos con el nombre "{search}".
+            {search.trim()
+              ? `No encontramos gastos para “${search.trim()}”.`
+              : `No hay gastos en la categoría ${filterCategory === "al_pedo" ? "Al Pedo" : filterCategory === "fijo" ? "Fijos" : "Variables"}.`}
           </p>
           <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto font-medium">
-            Cualquier gasto que cargues con el mismo nombre se acumulará automáticamente acá.
+            {search.trim() && filterCategory !== "all"
+              ? "Probá otro nombre o cambiá el filtro de categoría."
+              : "Probá otro nombre o elegí una categoría distinta para ver sus gastos."}
           </p>
+          <button
+            type="button"
+            onClick={() => { setSearch(""); setFilterCategory("all"); }}
+            className="mt-4 min-h-11 rounded-xl bg-blue-50 px-4 text-sm font-bold text-blue-700 active:scale-[0.98]"
+          >
+            Limpiar búsqueda y filtros
+          </button>
         </div>
       ) : (
         <div className="space-y-3">
           {filteredGroups.map((group, index) => {
             const isExpanded = Boolean(expandedGroups[group.key]);
             const percentOfTotal =
-              totalExpensesSum > 0 ? (group.totalAmount / totalExpensesSum) * 100 : 0;
+              percentageBaseTotal > 0 ? (group.totalAmount / percentageBaseTotal) * 100 : 0;
 
             return (
               <div
@@ -423,9 +486,11 @@ export default function GroupedExpensesView({
                 }`}
               >
                 {/* Main Card Header (Click to expand) */}
-                <div
+                <button
+                  type="button"
+                  aria-expanded={isExpanded}
                   onClick={() => toggleExpand(group.key)}
-                  className="p-4 sm:p-5 cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 select-none"
+                  className="w-full text-left p-4 sm:p-5 cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
                 >
                   {/* Left info */}
                   <div className="flex items-center gap-3 min-w-0">
@@ -456,14 +521,14 @@ export default function GroupedExpensesView({
                           </span>
                         )}
                         <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600 font-mono">
-                          {group.count} {group.count === 1 ? "compra / cobro" : "veces"}
+                          {group.count} {group.count === 1 ? "compra" : "compras"}
                         </span>
                       </div>
 
                       <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-3 font-medium">
                         <span>Promedio: <strong className="font-mono text-slate-800 font-bold">{currencySymbol} {formatMoney(group.average)}</strong> / vez</span>
                         <span className="hidden sm:inline text-slate-300">•</span>
-                        <span className="hidden sm:inline">Último: {group.lastDate}</span>
+                        <span className="hidden sm:inline">Último: {formatParaguayDateLabel(group.lastDate)}</span>
                       </div>
                     </div>
                   </div>
@@ -491,7 +556,7 @@ export default function GroupedExpensesView({
                       )}
                     </div>
                   </div>
-                </div>
+                </button>
 
                 {/* Progress bar showing portion of total expenses */}
                 <div className="px-4 sm:px-5 pb-3.5">
@@ -511,7 +576,7 @@ export default function GroupedExpensesView({
                 {isExpanded && (
                   <div className="border-t border-slate-100 bg-slate-50/60 p-3 sm:p-5 rounded-b-[24px] sm:rounded-b-[28px] space-y-2 animate-in fade-in duration-200">
                     <div className="text-[11px] font-black uppercase tracking-wider text-slate-400 mb-2 flex items-center justify-between">
-                      <span>Detalle de cada gasto en "{group.name}"</span>
+                      <span>Detalle de cada gasto en &quot;{group.name}&quot;</span>
                       <span className="font-mono text-slate-500 font-bold">{group.transactions.length} registros</span>
                     </div>
 
@@ -525,9 +590,9 @@ export default function GroupedExpensesView({
                           <div className="flex items-center gap-2.5 min-w-0 pr-2">
                             <div className="text-[11px] text-slate-400 font-mono font-medium flex items-center gap-1 shrink-0">
                               <Calendar className="h-3 w-3 text-slate-400" />
-                              <span>{tx.date}</span>
+                              <span>{formatParaguayDateLabel(tx.date)}</span>
                             </div>
-                            <div className="truncate text-xs font-bold text-slate-900">
+                            <div className="hidden sm:block truncate text-xs font-bold text-slate-900">
                               {tx.description}
                             </div>
                             <div className="hidden sm:inline shrink-0">
@@ -551,8 +616,9 @@ export default function GroupedExpensesView({
                                   e.stopPropagation();
                                   onEdit(tx);
                                 }}
-                                className="h-7 w-7 flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
+                                className="h-10 w-10 flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition"
                                 title="Editar"
+                                aria-label={`Editar gasto de ${group.name}`}
                               >
                                 <Edit2 className="h-3.5 w-3.5" />
                               </button>
@@ -561,8 +627,9 @@ export default function GroupedExpensesView({
                                   e.stopPropagation();
                                   onDelete(tx.id);
                                 }}
-                                className="h-7 w-7 flex items-center justify-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition"
+                                className="h-10 w-10 flex items-center justify-center rounded-lg text-slate-500 hover:bg-rose-50 hover:text-rose-600 transition"
                                 title="Eliminar"
+                                aria-label={`Eliminar gasto de ${group.name}`}
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
                               </button>

@@ -7,16 +7,19 @@ import {
   Car,
   Home,
   Gem,
-  Sparkles,
+  Target,
   Plus,
   Share2,
   CheckCircle2,
   Clock,
   Trash2,
   PiggyBank,
-  PartyPopper,
-  Flame,
+  Wallet,
+  CircleAlert,
+  Check,
 } from "lucide-react";
+import FinanceIcon, { type FinanceIconName } from "@/components/FinanceIcon";
+import { formatParaguayDateLabel, getParaguayDateString } from "@/lib/date-utils";
 
 interface CouplesGoal {
   id: number;
@@ -52,14 +55,16 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
   const [contributions, setContributions] = useState<Contribution[]>([]);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [notice, setNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // New goal form state
   const [showNewGoal, setShowNewGoal] = useState(false);
-  const [title, setTitle] = useState("Viaje a Camboriú fin de año");
+  const [title, setTitle] = useState("");
   const [category, setCategory] = useState("viaje");
-  const [targetAmount, setTargetAmount] = useState("12000000");
-  const [targetDate, setTargetDate] = useState("2026-12-31");
-  const [partnerName, setPartnerName] = useState("Mi Chuli");
+  const [targetAmount, setTargetAmount] = useState("");
+  const [targetDate, setTargetDate] = useState("");
+  const [partnerName, setPartnerName] = useState("");
 
   // Contribution form state
   const [contribAmount, setContribAmount] = useState("");
@@ -70,21 +75,34 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
   const fetchCouplesData = async () => {
     try {
       setLoading(true);
+      setLoadError("");
       const res = await fetch("/api/couples");
-      if (res.ok) {
-        const data = await res.json();
-        setGoal(data.goal);
-        setContributions(data.contributions || []);
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "No se pudieron cargar las metas de pareja.");
       }
+      setGoal(data.goal);
+      setContributions(data.contributions || []);
     } catch (err) {
-      console.error("Error loading couples goal:", err);
+      const message = err instanceof Error ? err.message : "No se pudo cargar la meta compartida.";
+      setLoadError(message);
     } finally {
       setLoading(false);
     }
   };
 
+  const resetNewGoal = () => {
+    setTitle("");
+    setCategory("viaje");
+    setTargetAmount("");
+    setTargetDate("");
+    setPartnerName("");
+    setShowNewGoal(false);
+  };
+
   useEffect(() => {
-    fetchCouplesData();
+    const timer = window.setTimeout(() => void fetchCouplesData(), 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   const handleCreateGoal = async (e: React.FormEvent) => {
@@ -105,11 +123,15 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
       });
 
       if (res.ok) {
-        setShowNewGoal(false);
+        resetNewGoal();
+        setNotice({ type: "success", text: "Meta creada. Ya podés empezar a registrar aportes." });
         await fetchCouplesData();
+      } else {
+        const data = await res.json().catch(() => null);
+        setNotice({ type: "error", text: data?.error || "No se pudo crear la meta. Revisá los datos e intentá de nuevo." });
       }
-    } catch (err) {
-      console.error("Error creating goal:", err);
+    } catch {
+      setNotice({ type: "error", text: "No se pudo conectar para crear la meta. Probá de nuevo." });
     } finally {
       setIsSubmitting(false);
     }
@@ -136,10 +158,14 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
       if (res.ok) {
         setContribAmount("");
         setContribNote("");
+        setNotice({ type: "success", text: "Aporte sumado a la meta." });
         await fetchCouplesData();
+      } else {
+        const data = await res.json().catch(() => null);
+        setNotice({ type: "error", text: data?.error || "No se pudo registrar el aporte. Revisá el monto e intentá de nuevo." });
       }
-    } catch (err) {
-      console.error("Error adding contribution:", err);
+    } catch {
+      setNotice({ type: "error", text: "No se pudo conectar para registrar el aporte. Probá de nuevo." });
     } finally {
       setIsSubmitting(false);
     }
@@ -154,20 +180,27 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
       if (res.ok) {
         setGoal(null);
         setContributions([]);
+        setNotice({ type: "success", text: "Meta cerrada." });
+      } else {
+        setNotice({ type: "error", text: "No se pudo cerrar la meta. Actualizá la pantalla e intentá de nuevo." });
       }
-    } catch (err) {
-      console.error("Error deleting goal:", err);
+    } catch {
+      setNotice({ type: "error", text: "No se pudo conectar para cerrar la meta." });
     }
   };
 
   const formatMoney = (val: number) => Math.round(val || 0).toLocaleString("es-PY");
 
-  const copyInvite = () => {
+  const copyInvite = async () => {
     if (!goal) return;
-    const text = `¡Amor! Creé nuestra meta "${goal.title}" en alpedo.app. Sumate con este código: ${goal.invite_code}`;
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2500);
+    try {
+      await navigator.clipboard.writeText(goal.invite_code);
+      setCopied(true);
+      setNotice({ type: "success", text: "Código copiado. Podés pegarlo en tu mensaje." });
+      window.setTimeout(() => setCopied(false), 2500);
+    } catch {
+      setNotice({ type: "error", text: "No se pudo copiar el código. Seleccionalo y copialo manualmente." });
+    }
   };
 
   const getCategoryIcon = (cat: string) => {
@@ -187,20 +220,38 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
 
   if (loading) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-pink-500 border-t-transparent" />
+      <div className="flex min-h-56 items-center justify-center" role="status" aria-live="polite">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-pink-500 border-t-transparent" aria-hidden="true" />
+        <span className="sr-only">Cargando metas compartidas</span>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="mx-auto max-w-lg rounded-2xl border border-rose-200 bg-rose-50 p-5 text-center text-rose-900" role="alert">
+        <CircleAlert className="mx-auto mb-2 h-6 w-6" aria-hidden="true" />
+        <p className="text-sm font-semibold">{loadError}</p>
+        <button type="button" onClick={() => void fetchCouplesData()} className="mt-3 min-h-11 rounded-xl bg-white px-4 text-sm font-bold text-rose-700 shadow-sm">Reintentar</button>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto pb-12">
+    <div className="mx-auto max-w-4xl space-y-4 px-1 pb-8 sm:space-y-6 sm:pb-12">
+      {notice && (
+        <div className={`flex items-start gap-2 rounded-2xl border p-3 text-sm font-semibold ${notice.type === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-rose-200 bg-rose-50 text-rose-800"}`} role="status" aria-live="polite">
+          {notice.type === "success" ? <Check className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" /> : <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />}
+          <span>{notice.text}</span>
+          <button type="button" onClick={() => setNotice(null)} className="ml-auto min-h-6 px-1 text-current/70" aria-label="Cerrar aviso">×</button>
+        </div>
+      )}
       {/* Header Banner */}
-      <div id="tour-couples-card" className="relative overflow-hidden rounded-[28px] border border-pink-200/80 bg-gradient-to-br from-pink-50/70 via-white to-rose-50/80 p-6 sm:p-8 shadow-[0_4px_24px_rgba(244,63,94,0.06)] text-slate-900">
+      <div id="tour-couples-card" className="relative overflow-hidden rounded-[24px] border border-pink-200/80 bg-white p-4 shadow-sm text-slate-900 sm:rounded-[28px] sm:p-8">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-pink-200 bg-pink-100 px-3 py-1 text-xs font-black text-pink-700 mb-3 shadow-sm">
-              <Heart className="h-3.5 w-3.5 fill-pink-500 text-pink-500 animate-pulse" />
+              <Heart className="h-3.5 w-3.5 fill-pink-500 text-pink-500" />
               Módulo Pareja • Ahorro Juntos
             </div>
             <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
@@ -213,8 +264,8 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
 
           {!goal && !showNewGoal && (
             <button
-              onClick={() => setShowNewGoal(true)}
-              className="inline-flex items-center gap-2 self-start rounded-2xl bg-gradient-to-r from-pink-500 to-rose-500 px-5 py-3 text-sm font-black text-white shadow-md shadow-pink-500/20 hover:opacity-95 transition active:scale-[0.98]"
+              onClick={() => { resetNewGoal(); setShowNewGoal(true); }}
+              className="inline-flex min-h-11 items-center gap-2 self-start rounded-2xl bg-rose-600 px-5 py-3 text-sm font-bold text-white shadow-sm hover:bg-rose-700 transition active:scale-[0.98]"
             >
               <Plus className="h-4 w-4" />
               Crear Meta Juntos
@@ -240,17 +291,17 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
               <span>Aportes privados</span>
             </div>
             <p className="mt-1 text-[11px] text-slate-500 font-medium">
-              Cada uno suma plata. Tu pareja ve el progreso sin ver tus otros gastos personales.
+              Registrá los aportes en esta meta; tus otros movimientos personales quedan aparte.
             </p>
           </div>
 
           <div className="rounded-2xl bg-white/80 border border-pink-100 p-3 shadow-xs">
             <div className="flex items-center gap-2 font-black text-xs text-purple-700">
               <span className="flex h-5 w-5 items-center justify-center rounded-full bg-purple-100 text-[10px]">3</span>
-              <span>Código Kp WhatsApp</span>
+              <span>Compartí el código</span>
             </div>
             <p className="mt-1 text-[11px] text-slate-500 font-medium">
-              Enviá el enlace de invitación para que ambos celulares sincronicen el avance.
+              Podés copiar el código para compartirlo. La meta aún no se sincroniza entre cuentas.
             </p>
           </div>
         </div>
@@ -260,17 +311,17 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
       {showNewGoal && !goal && (
         <form
           onSubmit={handleCreateGoal}
-          className="rounded-[28px] border border-slate-100 bg-white p-6 sm:p-8 space-y-5 shadow-[0_4px_24px_rgba(0,0,0,0.03)] text-slate-900"
+          className="rounded-[24px] border border-slate-100 bg-white p-4 shadow-[0_4px_24px_rgba(0,0,0,0.03)] text-slate-900 space-y-5 sm:rounded-[28px] sm:p-8"
         >
           <div className="flex items-center justify-between border-b border-slate-100 pb-4">
             <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-pink-500" />
+              <Target className="h-5 w-5 text-pink-500" />
               Definir Nueva Meta en Pareja
             </h3>
             <button
               type="button"
-              onClick={() => setShowNewGoal(false)}
-              className="text-xs text-slate-400 hover:text-slate-700 font-bold"
+              onClick={resetNewGoal}
+              className="min-h-11 rounded-xl px-3 text-xs text-slate-500 hover:text-slate-700 font-bold"
             >
               Cancelar
             </button>
@@ -278,11 +329,12 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-1.5">
+              <label htmlFor="couple-goal-title" className="block text-xs font-black uppercase tracking-wider text-slate-500 mb-1.5">
                 ¿Qué quieren lograr juntos?
               </label>
               <input
                 type="text"
+                id="couple-goal-title"
                 required
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
@@ -292,11 +344,12 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
             </div>
 
             <div>
-              <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-1.5">
+              <label htmlFor="couple-partner-name" className="block text-xs font-black uppercase tracking-wider text-slate-500 mb-1.5">
                 Apodo o Nombre de tu Pareja
               </label>
               <input
                 type="text"
+                id="couple-partner-name"
                 value={partnerName}
                 onChange={(e) => setPartnerName(e.target.value)}
                 placeholder="Ej: Mi Chuli, María, Guille..."
@@ -305,13 +358,15 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
             </div>
 
             <div>
-              <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-1.5">
+              <label htmlFor="couple-target-amount" className="block text-xs font-black uppercase tracking-wider text-slate-500 mb-1.5">
                 Monto Objetivo Total ({currencySymbol})
               </label>
               <input
                 type="number"
+                id="couple-target-amount"
                 min="1000"
-                step="any"
+                step="1"
+                inputMode="numeric"
                 required
                 value={targetAmount}
                 onChange={(e) => setTargetAmount(e.target.value)}
@@ -321,11 +376,13 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
             </div>
 
             <div>
-              <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-1.5">
+              <label htmlFor="couple-target-date" className="block text-xs font-black uppercase tracking-wider text-slate-500 mb-1.5">
                 Fecha Estimada
               </label>
               <input
                 type="date"
+                id="couple-target-date"
+                min={getParaguayDateString()}
                 value={targetDate}
                 onChange={(e) => setTargetDate(e.target.value)}
                 className="w-full h-11 rounded-xl border border-slate-200 bg-slate-50 px-3.5 text-sm text-slate-900 font-semibold focus:bg-white focus:border-pink-500 focus:outline-none transition"
@@ -339,23 +396,24 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
             </label>
             <div className="flex flex-wrap gap-2">
               {[
-                { id: "viaje", label: "Viaje / Vacaciones", icon: "✈️" },
-                { id: "auto", label: "Auto / Moto", icon: "🚗" },
-                { id: "casa", label: "Depto / Muebles", icon: "🏠" },
-                { id: "boda", label: "Casorio / Fiesta", icon: "💍" },
-                { id: "ahorro", label: "Ahorro Libre", icon: "🎯" },
+                { id: "viaje", label: "Viaje / Vacaciones", icon: "plane" as FinanceIconName },
+                { id: "auto", label: "Auto / Moto", icon: "car" as FinanceIconName },
+                { id: "casa", label: "Depto / Muebles", icon: "home" as FinanceIconName },
+                { id: "boda", label: "Casorio / Fiesta", icon: "ring" as FinanceIconName },
+                { id: "ahorro", label: "Ahorro libre", icon: "target" as FinanceIconName },
               ].map((c) => (
                 <button
                   key={c.id}
                   type="button"
                   onClick={() => setCategory(c.id)}
-                  className={`flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold transition ${
+                  aria-pressed={category === c.id}
+                  className={`flex min-h-11 items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold transition ${
                     category === c.id
                       ? "bg-pink-500 text-white shadow-md shadow-pink-500/20 font-black"
                       : "bg-slate-100 text-slate-700 hover:bg-slate-200"
                   }`}
                 >
-                  <span>{c.icon}</span>
+                  <FinanceIcon name={c.icon} className="h-4 w-4 shrink-0" />
                   {c.label}
                 </button>
               ))}
@@ -365,7 +423,7 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full h-12 rounded-2xl bg-gradient-to-r from-pink-500 to-rose-500 text-sm font-black text-white hover:opacity-95 shadow-md shadow-pink-500/20 transition active:scale-[0.98]"
+            className="w-full min-h-12 rounded-2xl bg-rose-600 text-sm font-bold text-white hover:bg-rose-700 transition active:scale-[0.98]"
           >
             {isSubmitting ? "Creando meta..." : "¡Iniciar Meta Compartida!"}
           </button>
@@ -374,10 +432,10 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
 
       {/* EMPTY STATE TEMPLATES */}
       {!goal && !showNewGoal && (
-        <div className="rounded-[28px] border border-pink-100 bg-white p-6 sm:p-8 space-y-6 shadow-[0_4px_24px_rgba(244,63,94,0.04)] text-slate-900">
+        <div className="rounded-[24px] border border-pink-100 bg-white p-4 shadow-[0_4px_24px_rgba(244,63,94,0.04)] text-slate-900 space-y-5 sm:rounded-[28px] sm:p-8 sm:space-y-6">
           <div className="text-center max-w-md mx-auto space-y-2">
             <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-pink-50 text-3xl shadow-sm border border-pink-100">
-              🐷
+              <PiggyBank className="h-7 w-7 text-pink-600" />
             </div>
             <h3 className="text-lg font-black text-slate-900">
               Todavía no crearon un chanchito juntos
@@ -394,43 +452,45 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
                 cat: "viaje",
                 target: 12000000,
                 desc: "Pasajes, posada y caipirinhas en la playa",
-                icon: "🏖️",
+                icon: "plane" as FinanceIconName,
               },
               {
                 title: "Entrega inicial para el auto",
                 cat: "auto",
                 target: 15000000,
                 desc: "Primer paso para comprar nuestro vehículo",
-                icon: "🚗",
+                icon: "car" as FinanceIconName,
               },
               {
                 title: "Muebles & Deco para el Dpto",
-                cat: "hogar",
+                cat: "casa",
                 target: 6000000,
                 desc: "Heladera, sommier y sillón para la sala",
-                icon: "🛋️",
+                icon: "home" as FinanceIconName,
               },
               {
                 title: "Fiesta o Casamiento soñado",
-                cat: "anillo",
+                cat: "boda",
                 target: 30000000,
                 desc: "El gran día con familia y amigos",
-                icon: "💍",
+                icon: "ring" as FinanceIconName,
               },
             ].map((tpl) => (
               <button
                 key={tpl.title}
                 type="button"
                 onClick={() => {
+                  setPartnerName("");
+                  setTargetDate("");
                   setTitle(tpl.title);
                   setCategory(tpl.cat);
                   setTargetAmount(String(tpl.target));
                   setShowNewGoal(true);
                 }}
-                className="flex items-start gap-3.5 p-4 rounded-2xl border border-slate-100 bg-slate-50/70 hover:bg-pink-50/50 hover:border-pink-200 transition text-left active:scale-[0.99] group"
+                className="flex min-h-[88px] items-start gap-3 rounded-2xl border border-slate-100 bg-slate-50/70 p-3.5 text-left transition hover:bg-pink-50/50 hover:border-pink-200 active:scale-[0.99] group sm:gap-3.5 sm:p-4"
               >
-                <span className="text-2xl shrink-0 group-hover:scale-110 transition-transform">
-                  {tpl.icon}
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-pink-50 text-pink-600 group-hover:scale-105 transition-transform">
+                  <FinanceIcon name={tpl.icon} className="h-5 w-5" />
                 </span>
                 <div className="min-w-0">
                   <div className="text-xs sm:text-sm font-black text-slate-900 group-hover:text-pink-600 transition-colors">
@@ -449,8 +509,8 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
 
           <div className="pt-2 text-center">
             <button
-              onClick={() => setShowNewGoal(true)}
-              className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-pink-500 to-rose-500 px-6 py-3 text-xs font-black text-white shadow-md shadow-pink-500/20 hover:opacity-95 transition active:scale-95"
+              onClick={() => { resetNewGoal(); setShowNewGoal(true); }}
+              className="inline-flex min-h-11 items-center gap-2 rounded-2xl bg-rose-600 px-6 py-3 text-xs font-bold text-white shadow-sm hover:bg-rose-700 transition active:scale-95"
             >
               <Plus className="h-4 w-4" />
               <span>Definir Meta Personalizada</span>
@@ -463,22 +523,22 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
       {goal && (
         <div className="space-y-6">
           {/* Main Shared Goal Card */}
-          <div className="rounded-[28px] border border-pink-200/80 bg-white p-6 sm:p-8 space-y-6 relative overflow-hidden shadow-[0_4px_24px_rgba(244,63,94,0.06)] text-slate-900">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-center gap-3">
+          <div className="relative space-y-5 overflow-hidden rounded-[24px] border border-pink-200/80 bg-white p-4 text-slate-900 shadow-sm sm:rounded-[28px] sm:p-8 sm:space-y-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex min-w-0 items-center gap-3">
                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-pink-50 border border-pink-200">
                   {getCategoryIcon(goal.category)}
                 </div>
-                <div>
-                  <h3 className="text-xl sm:text-2xl font-black text-slate-900">{goal.title}</h3>
-                  <div className="flex items-center gap-2 mt-1 text-xs text-slate-500 font-medium">
+                <div className="min-w-0">
+                  <h3 className="break-words text-xl font-black text-slate-900 sm:text-2xl">{goal.title}</h3>
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500">
                     <span>Meta de: <strong>{goal.creator_name || "Vos"}</strong> y <strong>{goal.partner_name}</strong></span>
                     {goal.target_date && (
                       <>
                         <span>•</span>
                         <span className="flex items-center gap-1 font-semibold">
                           <Clock className="h-3 w-3 text-slate-400" />
-                          {goal.target_date}
+                          {formatParaguayDateLabel(String(goal.target_date).slice(0, 10))}
                         </span>
                       </>
                     )}
@@ -486,18 +546,20 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 self-start">
                 <button
                   onClick={copyInvite}
-                  className="flex items-center gap-1.5 rounded-xl border border-pink-200 bg-pink-50 px-3 py-1.5 text-xs font-black text-pink-700 hover:bg-pink-100 transition"
+                  aria-label={copied ? "Código de invitación copiado" : "Copiar código de invitación"}
+                  className="flex min-h-11 items-center gap-1.5 rounded-xl border border-pink-200 bg-pink-50 px-3 text-xs font-black text-pink-700 transition hover:bg-pink-100"
                 >
                   <Share2 className="h-3.5 w-3.5" />
-                  {copied ? "¡Copiado!" : `Código: ${goal.invite_code}`}
+                  {copied ? "¡Copiado!" : "Copiar código"}
                 </button>
                 <button
                   onClick={handleDeleteGoal}
-                  className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 transition"
-                  title="Eliminar meta"
+                  className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-slate-500 transition hover:bg-rose-50 hover:text-rose-600"
+                  aria-label="Cerrar meta compartida"
+                  title="Cerrar meta"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -507,15 +569,15 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
             {/* Huge Progress Visual */}
             <div className="space-y-3">
               <div className="flex items-baseline justify-between">
-                <div>
-                  <span className="text-3xl sm:text-4xl font-black text-slate-900 font-mono">
+                <div className="min-w-0">
+                  <span className="block break-words text-2xl font-black text-slate-900 font-mono sm:inline sm:text-4xl">
                     {currencySymbol} {formatMoney(goal.current_amount)}
                   </span>
-                  <span className="text-sm font-bold text-slate-400 ml-2">
+                  <span className="text-xs font-bold text-slate-500 sm:ml-2 sm:text-sm">
                     de {currencySymbol} {formatMoney(goal.target_amount)}
                   </span>
                 </div>
-                <div className="text-2xl sm:text-3xl font-black font-mono text-pink-600">
+                <div className="shrink-0 text-xl font-black font-mono text-pink-600 sm:text-3xl">
                   {goal.progressPercent}%
                 </div>
               </div>
@@ -523,31 +585,36 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
               {/* Progress bar */}
               <div className="h-4 w-full overflow-hidden rounded-full bg-slate-100 p-0.5 border border-slate-200/80">
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-pink-500 via-rose-500 to-purple-500 transition-all duration-700"
+                  className="h-full rounded-full bg-rose-500 transition-all duration-500"
                   style={{ width: `${goal.progressPercent}%` }}
+                  role="progressbar"
+                  aria-label="Progreso de la meta compartida"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={goal.progressPercent}
                 />
               </div>
 
               {/* Milestones Road */}
-              <div className="grid grid-cols-4 text-center pt-2 border-t border-slate-100 text-[11px] sm:text-xs text-slate-500 font-medium">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-y-3 text-center pt-3 border-t border-slate-100 text-[11px] sm:text-xs text-slate-500 font-medium">
                 <div className={goal.progressPercent >= 25 ? "text-pink-600 font-bold" : ""}>
-                  ✈️ 25% Pasajes
+                  <span className="flex flex-col items-center gap-1"><Target className="h-4 w-4" />25% Primer tramo</span>
                 </div>
                 <div className={goal.progressPercent >= 50 ? "text-pink-600 font-bold" : ""}>
-                  🏨 50% Hospedaje
+                  <span className="flex flex-col items-center gap-1"><Target className="h-4 w-4" />50% Mitad del camino</span>
                 </div>
                 <div className={goal.progressPercent >= 75 ? "text-pink-600 font-bold" : ""}>
-                  🍹 75% Viáticos
+                  <span className="flex flex-col items-center gap-1"><Wallet className="h-4 w-4" />75% Cerca de la meta</span>
                 </div>
                 <div className={goal.progressPercent >= 100 ? "text-emerald-600 font-bold" : ""}>
-                  🏆 100% ¡Logrado!
+                  <span className="flex flex-col items-center gap-1"><CheckCircle2 className="h-4 w-4" />100% ¡Logrado!</span>
                 </div>
               </div>
             </div>
 
             {/* Split Contributions stats */}
-            <div className="grid grid-cols-2 gap-3 pt-2">
-              <div className="rounded-2xl border border-slate-200/80 bg-slate-50 p-4">
+            <div className="grid grid-cols-2 gap-2 pt-2 sm:gap-3">
+              <div className="min-w-0 rounded-2xl border border-slate-200/80 bg-slate-50 p-3 sm:p-4">
                 <span className="text-xs text-slate-500 block font-bold mb-1">
                   Aporte de {goal.creator_name || "Vos"}:
                 </span>
@@ -555,11 +622,11 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
                   {currencySymbol} {formatMoney(goal.totalMe)}
                 </span>
               </div>
-              <div className="rounded-2xl border border-pink-200/80 bg-pink-50/50 p-4">
+              <div className="min-w-0 rounded-2xl border border-pink-200/80 bg-pink-50/50 p-3 sm:p-4">
                 <span className="text-xs text-pink-700 block font-bold mb-1">
                   Aporte de {goal.partner_name}:
                 </span>
-                <span className="text-lg font-black text-pink-700 font-mono">
+                <span className="break-all text-base font-black text-pink-700 font-mono sm:text-lg">
                   {currencySymbol} {formatMoney(goal.totalPartner)}
                 </span>
               </div>
@@ -577,23 +644,28 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                 <div>
+                  <label htmlFor="couple-contribution-amount" className="sr-only">Monto del aporte en {currencySymbol}</label>
                   <input
                     type="number"
+                    id="couple-contribution-amount"
                     min="1"
-                    step="any"
+                    step="1"
+                    inputMode="numeric"
                     required
                     value={contribAmount}
                     onChange={(e) => setContribAmount(e.target.value)}
                     placeholder="Monto (₲)"
-                    className="w-full h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 font-mono font-bold focus:border-pink-500 focus:outline-none"
+                    className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-mono font-bold text-slate-900 focus:border-pink-500 focus:outline-none"
                   />
                 </div>
 
                 <div>
+                  <label htmlFor="couple-contribution-person" className="sr-only">Quién realiza el aporte</label>
                   <select
+                    id="couple-contribution-person"
                     value={contribBy}
                     onChange={(e) => setContribBy(e.target.value)}
-                    className="w-full h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 font-semibold focus:border-pink-500 focus:outline-none"
+                    className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-900 focus:border-pink-500 focus:outline-none"
                   >
                     <option value={goal.creator_name || "Vos"}>Aporta: {goal.creator_name || "Vos"}</option>
                     <option value={goal.partner_name}>Aporta: {goal.partner_name}</option>
@@ -601,12 +673,14 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
                 </div>
 
                 <div>
+                  <label htmlFor="couple-contribution-note" className="sr-only">Nota opcional del aporte</label>
                   <input
                     type="text"
+                    id="couple-contribution-note"
                     value={contribNote}
                     onChange={(e) => setContribNote(e.target.value)}
                     placeholder="Nota (Ej: Cocinamos en casa)"
-                    className="w-full h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 font-medium focus:border-pink-500 focus:outline-none"
+                    className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 focus:border-pink-500 focus:outline-none"
                   />
                 </div>
               </div>
@@ -614,9 +688,9 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
               <button
                 type="submit"
                 disabled={isSubmitting || !contribAmount}
-                className="w-full h-10 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 text-xs font-black text-white hover:opacity-95 shadow-md shadow-pink-500/20 transition disabled:opacity-50 active:scale-[0.98]"
+                className="w-full min-h-11 rounded-xl bg-rose-600 text-xs font-bold text-white hover:bg-rose-700 transition disabled:opacity-50 active:scale-[0.98]"
               >
-                {isSubmitting ? "Sumando..." : "Sumar Aporte al Pozo 🐷"}
+                {isSubmitting ? "Sumando..." : "Sumar aporte al pozo"}
               </button>
             </form>
 
@@ -630,17 +704,17 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
                   {contributions.map((c) => (
                     <div
                       key={c.id}
-                      className="flex items-center justify-between rounded-xl bg-slate-50 border border-slate-200/80 px-3.5 py-2 text-xs"
+                      className="flex flex-col gap-1.5 rounded-xl border border-slate-200/80 bg-slate-50 px-3.5 py-2.5 text-xs sm:flex-row sm:items-center sm:justify-between"
                     >
-                      <div className="flex items-center gap-2">
+                      <div className="min-w-0 sm:flex-1">
                         <span className="font-extrabold text-slate-900">{c.contributor_name}</span>
-                        {c.note && <span className="text-slate-500 italic">• "{c.note}"</span>}
+                        {c.note && <span className="ml-2 text-slate-500 italic">{c.note}</span>}
                       </div>
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center justify-between gap-3 sm:shrink-0">
                         <span className="font-mono font-black text-pink-600">
                           +{currencySymbol} {formatMoney(c.amount)}
                         </span>
-                        <span className="text-[10px] text-slate-400 font-medium">{c.date}</span>
+                        <span className="text-[10px] text-slate-500 font-medium">{formatParaguayDateLabel(String(c.date).slice(0, 10))}</span>
                       </div>
                     </div>
                   ))}

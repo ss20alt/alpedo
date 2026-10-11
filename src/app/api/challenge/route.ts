@@ -1,42 +1,56 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
-import { checkAuth } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth";
+import { getParaguayMonthString } from "@/lib/date-utils";
 
 interface ChallengeRow {
   id: string;
   salary: number;
   start_month: string;
   completed_months: string;
+  user_id: number;
   updated_at: string;
 }
 
-export async function GET() {
-  if (!(await checkAuth())) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+const defaultSalary = 3044000;
+
+function getChallengeId(userId: number) {
+  // Preserve the legacy row for user 1 while keeping each additional account separate.
+  return userId === 1 ? "default" : `user-${userId}`;
+}
+
+function parseCompletedMonths(raw: string | undefined): number[] {
+  try {
+    const parsed: unknown = JSON.parse(raw || "[]");
+    if (!Array.isArray(parsed)) return [];
+    return [...new Set(parsed.filter((month): month is number => Number.isInteger(month) && month >= 1 && month <= 12))]
+      .sort((a, b) => a - b);
+  } catch {
+    return [];
   }
+}
+
+function validMonth(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\d{4}-(0[1-9]|1[0-2])$/.test(value)) return false;
+  const [year, month] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, 1));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1;
+}
+
+export async function GET() {
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
   try {
-    const row = await db.queryOne<ChallengeRow>("SELECT * FROM savings_challenge WHERE id = 'default'");
-
-    if (!row) {
-      return NextResponse.json({
-        salary: 3044000,
-        start_month: "2026-10",
-        completed_months: [],
-      });
-    }
-
-    let completedList: number[] = [];
-    try {
-      completedList = JSON.parse(row.completed_months || "[]");
-    } catch {
-      completedList = [];
-    }
+    const row = await db.queryOne<ChallengeRow>(
+      "SELECT * FROM savings_challenge WHERE id = ? AND user_id = ?",
+      [getChallengeId(user.id), user.id]
+    );
 
     return NextResponse.json({
-      salary: parseFloat(String(row.salary)) || 3044000,
-      start_month: row.start_month || "2026-10",
-      completed_months: completedList,
+      salary: row ? Number(row.salary) || defaultSalary : defaultSalary,
+      start_month: row?.start_month || getParaguayMonthString(),
+      completed_months: parseCompletedMonths(row?.completed_months),
     });
   } catch (err) {
     console.error("Error fetching challenge:", err);
@@ -45,62 +59,64 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  if (!(await checkAuth())) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  }
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
   try {
     const body = await req.json();
-    const { action, salary, start_month, month_index } = body;
+    const { action } = body;
+    const challengeId = getChallengeId(user.id);
+    const row = await db.queryOne<ChallengeRow>(
+      "SELECT * FROM savings_challenge WHERE id = ? AND user_id = ?",
+      [challengeId, user.id]
+    );
 
-    const row = await db.queryOne<ChallengeRow>("SELECT * FROM savings_challenge WHERE id = 'default'");
-    let currentSalary = row?.salary ? parseFloat(String(row.salary)) : 3044000;
-    let currentStartMonth = row?.start_month ?? "2026-10";
-    let completedList: number[] = [];
-    try {
-      completedList = JSON.parse(row?.completed_months || "[]");
-    } catch {
-      completedList = [];
-    }
+    let salary = row ? Number(row.salary) || defaultSalary : defaultSalary;
+    let startMonth = row?.start_month || getParaguayMonthString();
+    const completedMonths = parseCompletedMonths(row?.completed_months);
 
     if (action === "update_config") {
-      if (salary !== undefined) {
-        const parsed = parseFloat(salary);
-        if (!isNaN(parsed) && parsed > 0) currentSalary = parsed;
+      if (body.salary !== undefined) {
+        const parsedSalary = Number(body.salary);
+        if (!Number.isFinite(parsedSalary) || parsedSalary <= 0 || parsedSalary > 9999999999999.99) {
+          return NextResponse.json({ error: "Ingresá un salario válido mayor que cero" }, { status: 400 });
+        }
+        salary = parsedSalary;
       }
-      if (start_month) {
-        currentStartMonth = start_month;
+      if (body.start_month !== undefined) {
+        if (!validMonth(body.start_month)) {
+          return NextResponse.json({ error: "Elegí un mes de inicio válido" }, { status: 400 });
+        }
+        startMonth = body.start_month;
       }
     } else if (action === "toggle_month") {
-      const idx = parseInt(month_index);
-      if (!isNaN(idx) && idx >= 1 && idx <= 12) {
-        if (completedList.includes(idx)) {
-          completedList = completedList.filter((m) => m !== idx);
-        } else {
-          completedList.push(idx);
-          completedList.sort((a, b) => a - b);
-        }
+      const monthIndex = Number(body.month_index);
+      if (!Number.isInteger(monthIndex) || monthIndex < 1 || monthIndex > 12) {
+        return NextResponse.json({ error: "El mes seleccionado no es válido" }, { status: 400 });
       }
+      const index = completedMonths.indexOf(monthIndex);
+      if (index >= 0) completedMonths.splice(index, 1);
+      else completedMonths.push(monthIndex);
+      completedMonths.sort((a, b) => a - b);
     } else if (action === "reset") {
-      completedList = [];
+      completedMonths.length = 0;
+    } else {
+      return NextResponse.json({ error: "Acción no reconocida" }, { status: 400 });
     }
 
     await db.execute(
-      `INSERT INTO savings_challenge (id, salary, start_month, completed_months, updated_at)
-       VALUES ('default', ?, ?, ?, CURRENT_TIMESTAMP)
+      `INSERT INTO savings_challenge (id, salary, start_month, completed_months, updated_at, user_id)
+       VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
        ON CONFLICT(id) DO UPDATE SET
          salary = EXCLUDED.salary,
          start_month = EXCLUDED.start_month,
          completed_months = EXCLUDED.completed_months,
-         updated_at = CURRENT_TIMESTAMP`,
-      [currentSalary, currentStartMonth, JSON.stringify(completedList)]
+         updated_at = CURRENT_TIMESTAMP
+       WHERE savings_challenge.user_id = EXCLUDED.user_id`,
+      [challengeId, salary, startMonth, JSON.stringify(completedMonths), user.id]
     );
 
-    return NextResponse.json({
-      salary: currentSalary,
-      start_month: currentStartMonth,
-      completed_months: completedList,
-    });
+    return NextResponse.json({ salary, start_month: startMonth, completed_months: completedMonths });
   } catch (err) {
     console.error("Error in challenge API:", err);
     return NextResponse.json({ error: "Error al actualizar reto" }, { status: 500 });

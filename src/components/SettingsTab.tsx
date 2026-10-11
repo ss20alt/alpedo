@@ -9,11 +9,11 @@ import {
   Database,
   Check,
   AlertCircle,
-  Sparkles,
   LogOut,
   FileSpreadsheet,
   Trash2,
   HelpCircle,
+  BookOpen,
   User,
   Share2,
   Copy,
@@ -228,8 +228,8 @@ export default function SettingsTab({
               <p className="text-xs text-slate-500 font-medium">
                 {currentUser?.email || "demo@alpedo.app"}
               </p>
-              <p className="text-[11px] text-[#1656DB] font-semibold mt-0.5">
-                🔒 Tus datos están aislados y protegidos por tu PIN
+              <p className="flex items-center gap-1.5 text-[11px] text-[#1656DB] font-semibold mt-0.5">
+                <Shield className="h-3.5 w-3.5 shrink-0" /> Tus datos están aislados y protegidos por tu PIN
               </p>
             </div>
           </div>
@@ -430,7 +430,7 @@ export default function SettingsTab({
       <div className="rounded-[28px] border border-slate-100 bg-white p-4 sm:p-6 shadow-[0_4px_24px_rgba(0,0,0,0.03)] text-slate-900 flex flex-col justify-between">
         <div>
           <h3 className="text-sm sm:text-base font-black text-slate-900 flex items-center gap-2 mb-1">
-            <Sparkles className="h-4 w-4 sm:h-5 sm:w-5 text-orange-500 shrink-0" />
+            <Database className="h-4 w-4 sm:h-5 sm:w-5 text-orange-500 shrink-0" />
             <span>Datos de Ejemplo & Limpieza</span>
           </h3>
           <p className="text-[11px] sm:text-xs text-slate-500 font-medium mb-3">
@@ -446,7 +446,7 @@ export default function SettingsTab({
               disabled={seeding || clearing}
               className="flex-1 h-11 flex items-center justify-center gap-2 rounded-xl bg-orange-50 border border-orange-200 px-4 text-xs font-black text-orange-700 hover:bg-orange-100 active:scale-95 transition"
             >
-              <Sparkles className="h-4 w-4 text-orange-500" />
+              <Database className="h-4 w-4 text-orange-500" />
               <span>{seeding ? "Cargando..." : "Cargar Demo Paraguay"}</span>
             </button>
 
@@ -492,15 +492,15 @@ export default function SettingsTab({
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="inline-flex items-center gap-1.5 rounded-full bg-blue-100/80 px-2.5 py-0.5 text-[10px] font-black text-[#1656DB]">
-              <Sparkles className="h-3 w-3" />
-              <span>ONBOARDING INTERACTIVO</span>
+              <BookOpen className="h-3 w-3" />
+              <span>AYUDA</span>
             </div>
             <h3 className="text-sm sm:text-base font-black text-slate-900 flex items-center gap-2">
               <HelpCircle className="h-4 w-4 text-[#1656DB] shrink-0" />
-              <span>Tour Interactivo & Guía de alpedo.app</span>
+              <span>Guía de alpedo.app</span>
             </h3>
             <p className="text-xs text-slate-500 font-medium max-w-xl">
-              ¿Querés repasar cómo funciona cada sección, el asistente ¿Me da el cuero? 🧉 o el control de gastos? Volvé a iniciar el recorrido guiado dinámico en cualquier momento.
+              ¿Querés repasar cómo funciona cada sección, el asistente ¿Me da el cuero? o el control de gastos? Volvé a iniciar el recorrido guiado cuando quieras.
             </p>
           </div>
           <button
@@ -511,8 +511,8 @@ export default function SettingsTab({
             }}
             className="w-full sm:w-auto h-11 px-5 rounded-xl bg-[#1656DB] text-xs font-black text-white hover:bg-blue-600 active:scale-95 transition shadow-md shadow-blue-600/20 flex items-center justify-center gap-2 shrink-0"
           >
-            <Sparkles className="h-4 w-4 text-blue-200" />
-            <span>Iniciar Tour Dinámico</span>
+            <BookOpen className="h-4 w-4 text-blue-200" />
+            <span>Ver recorrido</span>
           </button>
         </div>
       </div>

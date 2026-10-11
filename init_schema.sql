@@ -24,6 +24,7 @@ CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions (category);
 
 CREATE TABLE IF NOT EXISTS loan_simulations (
   id VARCHAR(64) PRIMARY KEY,
+  user_id INTEGER NOT NULL DEFAULT 1,
   title VARCHAR(255) NOT NULL,
   amount NUMERIC(15, 2) NOT NULL,
   installments INTEGER NOT NULL,
@@ -34,13 +35,21 @@ CREATE TABLE IF NOT EXISTS loan_simulations (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+ALTER TABLE loan_simulations ADD COLUMN IF NOT EXISTS user_id INTEGER NOT NULL DEFAULT 1;
+CREATE INDEX IF NOT EXISTS idx_loan_simulations_user_created ON loan_simulations (user_id, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS savings_challenge (
   id VARCHAR(64) PRIMARY KEY,
   salary NUMERIC(15, 2) NOT NULL DEFAULT 3044000,
-  start_month VARCHAR(10) NOT NULL DEFAULT '2026-10',
+  start_month VARCHAR(10) NOT NULL DEFAULT to_char(CURRENT_DATE, 'YYYY-MM'),
   completed_months TEXT NOT NULL DEFAULT '[]',
+  user_id INTEGER NOT NULL DEFAULT 1,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+ALTER TABLE savings_challenge ADD COLUMN IF NOT EXISTS user_id INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE savings_challenge ALTER COLUMN start_month SET DEFAULT to_char(CURRENT_DATE, 'YYYY-MM');
+CREATE INDEX IF NOT EXISTS idx_savings_challenge_user ON savings_challenge (user_id);
 
 -- Metas en Pareja (alpedo.app)
 CREATE TABLE IF NOT EXISTS couples_goals (
@@ -54,8 +63,13 @@ CREATE TABLE IF NOT EXISTS couples_goals (
   partner_name VARCHAR(150),
   creator_name VARCHAR(150) DEFAULT 'Vos',
   status VARCHAR(20) DEFAULT 'active',
+  user_id INTEGER NOT NULL DEFAULT 1,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Keep existing installations compatible while assigning legacy goals to user 1.
+ALTER TABLE couples_goals ADD COLUMN IF NOT EXISTS user_id INTEGER NOT NULL DEFAULT 1;
+CREATE INDEX IF NOT EXISTS idx_couples_goals_user_status ON couples_goals (user_id, status, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS couples_contributions (
   id SERIAL PRIMARY KEY,
@@ -70,12 +84,14 @@ CREATE TABLE IF NOT EXISTS couples_contributions (
 -- Rachas con Amigos & Duelos
 CREATE TABLE IF NOT EXISTS friend_streaks (
   id SERIAL PRIMARY KEY,
-  friend_code VARCHAR(30) UNIQUE NOT NULL,
+  user_id INTEGER NOT NULL DEFAULT 1,
+  friend_code VARCHAR(30) NOT NULL,
   friend_name VARCHAR(150) NOT NULL,
   streak_count INTEGER DEFAULT 1,
   streak_type VARCHAR(50) DEFAULT 'control_al_pedo',
   last_checkin_date DATE DEFAULT CURRENT_DATE,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (user_id, friend_code)
 );
 
 -- Default Settings
@@ -90,5 +106,5 @@ ON CONFLICT (key) DO NOTHING;
 
 -- Default Savings Challenge
 INSERT INTO savings_challenge (id, salary, start_month, completed_months)
-VALUES ('default', 3044000, '2026-10', '[]')
+VALUES ('default', 3044000, to_char(CURRENT_DATE, 'YYYY-MM'), '[]')
 ON CONFLICT (id) DO NOTHING;
