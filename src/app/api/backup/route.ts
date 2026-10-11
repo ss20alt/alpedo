@@ -21,14 +21,14 @@ export async function GET() {
       : [];
     const savingsChallenge = await db.query("SELECT * FROM savings_challenge WHERE user_id = ?", [user.id]);
     const couplesGoals = await db.query(
-      "SELECT * FROM couples_goals WHERE user_id = ? OR (user_id IS NULL AND ? = 1)",
-      [user.id, user.id]
+      "SELECT * FROM couples_goals WHERE user_id = ? OR partner_user_id = ? OR (user_id IS NULL AND ? = 1)",
+      [user.id, user.id, user.id]
     );
     const couplesContributions = await db.query(
       `SELECT cc.* FROM couples_contributions cc
        INNER JOIN couples_goals cg ON cg.id = cc.goal_id
-       WHERE cg.user_id = ? OR (cg.user_id IS NULL AND ? = 1)`,
-      [user.id, user.id]
+       WHERE cg.user_id = ? OR cg.partner_user_id = ? OR (cg.user_id IS NULL AND ? = 1)`,
+      [user.id, user.id, user.id]
     );
     const friendStreaks = await db.query("SELECT friend_code, friend_name FROM friend_streaks WHERE user_id = ?", [user.id]);
 
@@ -183,6 +183,17 @@ export async function POST(req: Request) {
     if (data.couples_goals && Array.isArray(data.couples_goals)) {
       for (const g of data.couples_goals) {
         if (!g || !Number.isInteger(Number(g.id)) || typeof g.invite_code !== "string" || !g.invite_code) { skipped += 1; continue; }
+        const isGoalOwner = Number(g.user_id ?? user.id) === user.id || (g.user_id == null && user.id === 1);
+        const isGoalPartner = Number(g.partner_user_id) === user.id;
+        if (!isGoalOwner && !isGoalPartner) { skipped += 1; continue; }
+        if (isGoalPartner && !isGoalOwner) {
+          const linkedGoal = await db.queryOne<{ id: number }>(
+            "SELECT id FROM couples_goals WHERE id = ? AND partner_user_id = ?",
+            [g.id, user.id]
+          );
+          if (!linkedGoal) { skipped += 1; continue; }
+          continue;
+        }
         const conflictingGoals = await db.query<{ user_id: number | null }>("SELECT user_id FROM couples_goals WHERE id = ? OR invite_code = ?", [g.id, g.invite_code]);
         if (conflictingGoals.some((goal) => goal.user_id !== user.id && !(goal.user_id === null && user.id === 1))) { skipped += 1; continue; }
         const affected = await db.execute(
@@ -217,19 +228,23 @@ export async function POST(req: Request) {
     // 4. Restore Couples Contributions
     if (data.couples_contributions && Array.isArray(data.couples_contributions)) {
       for (const cc of data.couples_contributions) {
+        const contributionUserId = Number.isInteger(Number(cc.contributor_user_id)) && Number(cc.contributor_user_id) === user.id
+          ? user.id
+          : null;
         const affected = await db.execute(
-          `INSERT INTO couples_contributions (id, goal_id, contributor_name, amount, note, date, created_at)
-           SELECT ?, cg.id, ?, ?, ?, ?, ? FROM couples_goals cg WHERE cg.id = ? AND cg.user_id = ?
+          `INSERT INTO couples_contributions (id, goal_id, contributor_name, contributor_user_id, amount, note, date, created_at)
+           SELECT ?, cg.id, ?, ?, ?, ?, ?, ? FROM couples_goals cg WHERE cg.id = ? AND (cg.user_id = ? OR cg.partner_user_id = ?)
            ON CONFLICT (id) DO NOTHING`,
           [
             cc.id,
-            cc.goal_id,
             cc.contributor_name,
+            contributionUserId,
             parseFloat(cc.amount),
             cc.note,
             cc.date,
             cc.created_at || new Date().toISOString(),
             cc.goal_id,
+            user.id,
             user.id,
           ]
         );
