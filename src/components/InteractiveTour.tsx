@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { triggerHaptic } from "@/lib/haptics";
 import FinanceIcon, { type FinanceIconName } from "@/components/FinanceIcon";
+import { trapDialogTab } from "@/lib/dialog-keyboard";
 
 export interface TourStep {
   id: string;
@@ -186,8 +187,8 @@ export const TOUR_STEPS: TourStep[] = [
     icon: <Layers className="h-4 w-4 text-cyan-600" />,
     headline: "Detectá a dónde se va tu plata",
     description:
-      "Acumula automáticamente tus compras por comercio (Biggie, Bolt, Superseis, etc.) para detectar fugas hormiga.",
-    tip: "Descubrí qué comercio se lleva más dinero.",
+      "Agrupa tus gastos cuando escribís el mismo concepto para que puedas ver cuánto suma.",
+    tip: "Usá nombres consistentes al cargar movimientos para agruparlos.",
     targetTab: "grouped",
     targetSelector: "#tour-grouped-view",
     spotlightPadding: 8,
@@ -200,8 +201,8 @@ export const TOUR_STEPS: TourStep[] = [
     icon: <Heart className="h-4 w-4 text-purple-600" />,
     headline: "Un chanchito común sin perder privacidad",
     description:
-      "Chanchito compartido con tu pareja (vacaciones, casa o auto) manteniendo 100% privados tus gastos personales.",
-    tip: "Vinculen sus celulares con código de pareja.",
+      "Registrá una meta y los aportes que hacen juntos. Los gastos personales de cada cuenta quedan separados.",
+    tip: "El código se puede compartir; la sincronización entre cuentas aún no está disponible.",
     targetTab: "couples",
     targetSelector: "#tour-couples-card",
     spotlightPadding: 8,
@@ -228,8 +229,8 @@ export const TOUR_STEPS: TourStep[] = [
     icon: <Trophy className="h-4 w-4 text-amber-600" />,
     headline: "¿Quién aguanta más días sin tirar plata?",
     description:
-      "Días consecutivos sin gastos al pedo, duelos amistosos con amigos mediante códigos Kp y ranking por ciudades.",
-    tip: "Mantené tu racha activa registrando a diario.",
+      "Seguí los días sin gastos marcados como Al Pedo y compará tu avance con códigos Kp.",
+    tip: "Registrá tus gastos cada día para que la racha refleje tu actividad.",
     targetTab: "streaks",
     targetSelector: "#tour-streaks-card",
     spotlightPadding: 8,
@@ -242,7 +243,7 @@ export const TOUR_STEPS: TourStep[] = [
     icon: <Calculator className="h-4 w-4 text-blue-600" />,
     headline: "Calculá si una cuota cabe en tu bolsillo",
     description:
-      "Calculá la cuota real bancaria con Sistema Francés y verificá que no supere el 30% seguro de tus ingresos.",
+      "Estimá la cuota con el Sistema Francés y comparala con tus ingresos. La oferta final puede incluir cargos adicionales.",
     tip: "Guardá simulaciones para comparar bancos.",
     targetTab: "loans",
     targetSelector: "#tour-loans-card",
@@ -251,7 +252,7 @@ export const TOUR_STEPS: TourStep[] = [
   {
     id: "privacy_pin",
     title: "Privacidad en un toque",
-    badge: "Privacidad Total",
+    badge: "Ocultar importes",
     badgeColor: "bg-slate-100 text-slate-800 border-slate-300",
     icon: <Eye className="h-4 w-4 text-[#1656DB]" />,
     headline: "Ocultá tus números en 1 toque",
@@ -266,6 +267,7 @@ export const TOUR_STEPS: TourStep[] = [
 ];
 
 interface InteractiveTourProps {
+  userId: number;
   isOpen: boolean;
   onClose: () => void;
   onNavigateTab: (tab: TourStep["targetTab"]) => void;
@@ -280,6 +282,7 @@ interface TargetBox {
 }
 
 export default function InteractiveTour({
+  userId,
   isOpen,
   onClose,
   onNavigateTab,
@@ -538,7 +541,7 @@ export default function InteractiveTour({
   const handleComplete = () => {
     triggerHaptic("success");
     if (typeof window !== "undefined") {
-      localStorage.setItem("alpedo_tour_completed", "true");
+      localStorage.setItem(`alpedo_tour_completed_${userId}`, "true");
     }
     setCurrentStepIndex(0);
     onNavigateTab("dashboard");
@@ -598,7 +601,14 @@ export default function InteractiveTour({
   const progressPercent = Math.round(((currentStepIndex + 1) / TOUR_STEPS.length) * 100);
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden select-none animate-in fade-in duration-200">
+    <div
+      className="fixed inset-0 z-50 overflow-hidden select-none animate-in fade-in duration-200"
+      role="dialog" aria-modal="true" aria-label={`Guía paso ${currentStepIndex + 1} de ${TOUR_STEPS.length}`}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") handleComplete();
+        trapDialogTab(event);
+      }}
+    >
       {/* 1. Dynamic SVG Cutout Mask (Spotlight on Target Element) */}
       <svg
         className={`fixed inset-0 w-full h-full pointer-events-none z-40 transition-opacity duration-300 ease-out ${
@@ -694,7 +704,7 @@ export default function InteractiveTour({
           <div className="flex items-center justify-between pt-0.5 pb-0.5">
             <div className="flex items-center gap-1.5 min-w-0">
               <span
-                className={`rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-wider flex items-center gap-1 truncate ${currentStep.badgeColor}`}
+                className={`rounded-full border px-2 py-1 text-[10px] font-black uppercase tracking-wider flex items-center gap-1 truncate ${currentStep.badgeColor}`}
               >
                 <FinanceIcon name={currentTabMeta.icon} className="h-4 w-4" />
                 <span className="truncate">{currentStep.badge}</span>
@@ -706,9 +716,10 @@ export default function InteractiveTour({
 
             <button
               onClick={handleComplete}
-              className="rounded-lg p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition active:scale-95 shrink-0 ml-1"
+              className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition active:scale-95 shrink-0 ml-1"
               title="Omitir Guía"
               aria-label="Cerrar Guía"
+              autoFocus
             >
               <X className="h-4 w-4" />
             </button>
@@ -716,12 +727,12 @@ export default function InteractiveTour({
 
           {/* Middle Row: Title + Inline Concise Description */}
           <div className="my-1">
-            <h3 className="text-xs sm:text-sm font-black text-slate-900 tracking-tight flex items-center gap-1.5 leading-snug">
+            <h3 className="text-sm font-black text-slate-900 tracking-tight flex items-center gap-1.5 leading-snug">
               <span className="shrink-0">{currentStep.icon}</span>
               <span className="truncate">{currentStep.title}</span>
             </h3>
 
-            <p className="text-[11px] sm:text-xs text-slate-600 font-medium leading-snug line-clamp-2 mt-0.5">
+            <p className="text-xs text-slate-600 font-medium leading-relaxed mt-1">
               {currentStep.description}
             </p>
           </div>
@@ -734,13 +745,13 @@ export default function InteractiveTour({
                 <button
                   type="button"
                   onClick={handlePrev}
-                  className="h-7 px-2 rounded-lg border border-slate-200 bg-slate-50 text-[10px] font-bold text-slate-600 hover:bg-slate-100 active:scale-95 transition flex items-center gap-0.5"
+                  className="h-10 px-3 rounded-lg border border-slate-200 bg-slate-50 text-xs font-bold text-slate-600 hover:bg-slate-100 active:scale-95 transition flex items-center gap-0.5"
                 >
                   <ArrowLeft className="h-3 w-3" />
                   <span>Atrás</span>
                 </button>
               ) : (
-                <span className="text-[9px] text-slate-400 font-semibold px-1">
+                <span className="text-[10px] text-slate-500 font-semibold px-1">
                   Guía paso a paso
                 </span>
               )}
@@ -749,15 +760,14 @@ export default function InteractiveTour({
             {/* Center: Mini dots */}
             <div className="flex items-center justify-center gap-1 py-0.5">
               {TOUR_STEPS.map((step, idx) => (
-                <button
+                <span
                   key={step.id}
-                  onClick={() => goToStep(idx)}
                   className={`rounded-full transition-all duration-300 ${
                     idx === currentStepIndex
-                      ? "w-3 h-1 bg-[#1656DB]"
-                      : "w-1 h-1 bg-slate-200 hover:bg-slate-300"
+                      ? "w-3 h-1.5 bg-[#1656DB]"
+                      : "w-1.5 h-1.5 bg-slate-300"
                   }`}
-                  aria-label={`Ir al paso ${idx + 1}`}
+                  aria-hidden="true"
                 />
               ))}
             </div>
@@ -766,7 +776,7 @@ export default function InteractiveTour({
             <button
               type="button"
               onClick={handleNext}
-              className="h-7.5 px-3 rounded-lg bg-[#1656DB] text-[10px] sm:text-[11px] font-black text-white hover:bg-blue-600 active:scale-95 transition shadow-sm shadow-blue-600/20 flex items-center gap-1 shrink-0"
+              className="h-10 px-3 rounded-lg bg-[#1656DB] text-xs font-black text-white hover:bg-blue-600 active:scale-95 transition shadow-sm shadow-blue-600/20 flex items-center gap-1 shrink-0"
             >
               {isLastStep ? (
                 <>

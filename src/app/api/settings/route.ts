@@ -14,7 +14,11 @@ export async function GET() {
   }
 
   try {
-    const rows = await db.query<{ key: string; value: string }>("SELECT key, value FROM settings");
+    const rows = user.id === 1
+      ? await db.query<{ key: string; value: string }>(
+          "SELECT key, value FROM settings WHERE key IN ('app_name')"
+        )
+      : [];
     const settingsObj: Record<string, string> = {};
     for (const r of rows) {
       if (r.key !== "pin_hash") {
@@ -25,17 +29,17 @@ export async function GET() {
     // Overlay user-specific settings
     settingsObj["user_name"] = user.name;
     settingsObj["user_email"] = user.email;
-    settingsObj["currency_symbol"] = user.currency_symbol || settingsObj["currency_symbol"] || "₲";
-    settingsObj["currency_code"] = user.currency_code || settingsObj["currency_code"] || "PYG";
+    settingsObj["currency_symbol"] = "₲";
+    settingsObj["currency_code"] = "PYG";
     settingsObj["budget_al_pedo_limit"] = String(user.budget_al_pedo_limit ?? 500000);
     settingsObj["budget_variable_limit"] = String(user.budget_variable_limit ?? 1500000);
     settingsObj["emergency_fund_saved"] = String(user.emergency_fund_saved ?? 0);
-    settingsObj["account_bank"] = user.account_bank || "BANCO ITAÚ";
-    settingsObj["account_type"] = user.account_type || "Caja de Ahorro Principal";
-    settingsObj["account_last4"] = user.account_last4 || "4291";
-    settingsObj["account_base_balance"] = String(user.account_base_balance ?? 2500000);
+    settingsObj["account_bank"] = user.account_bank || "";
+    settingsObj["account_type"] = user.account_type || "";
+    settingsObj["account_last4"] = user.account_last4 || "";
+    settingsObj["account_base_balance"] = String(user.account_base_balance ?? 0);
 
-    return NextResponse.json(settingsObj);
+    return NextResponse.json(settingsObj, { headers: { "Cache-Control": "no-store" } });
   } catch (err) {
     console.error("Error fetching settings:", err);
     return NextResponse.json({ error: "Error al obtener configuración" }, { status: 500 });
@@ -54,14 +58,31 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Formato JSON inválido" }, { status: 400 });
     }
     const body = parsedBody;
+    if ((body.currency_code !== undefined && body.currency_code !== "PYG") ||
+        (body.currency_symbol !== undefined && body.currency_symbol !== "₲")) {
+      return NextResponse.json({ error: "Por ahora solo se admiten importes en guaraníes" }, { status: 400 });
+    }
+    for (const key of ["budget_al_pedo_limit", "budget_variable_limit", "emergency_fund_saved", "account_base_balance"]) {
+      if (body[key] !== undefined && (typeof body[key] !== "number" ||
+          !Number.isFinite(body[key]) || Number(body[key]) < 0 || Number(body[key]) > 1_000_000_000_000)) {
+        return NextResponse.json({ error: `Monto inválido: ${key}` }, { status: 400 });
+      }
+    }
+    for (const key of ["account_bank", "account_type", "name"]) {
+      if (body[key] !== undefined && (typeof body[key] !== "string" || String(body[key]).length > 100)) {
+        return NextResponse.json({ error: `Texto inválido: ${key}` }, { status: 400 });
+      }
+    }
+    if (body.account_last4 !== undefined &&
+        (typeof body.account_last4 !== "string" || !/^\d{0,4}$/.test(body.account_last4))) {
+      return NextResponse.json({ error: "Los últimos dígitos de cuenta no son válidos" }, { status: 400 });
+    }
 
     // Update in users table
     const updates: string[] = [];
     const params: DbParameter[] = [];
 
     const userFields = [
-      "currency_symbol",
-      "currency_code",
       "budget_al_pedo_limit",
       "budget_variable_limit",
       "emergency_fund_saved",
@@ -74,7 +95,7 @@ export async function POST(req: Request) {
 
     for (const field of userFields) {
       const value = body[field];
-      if (typeof value === "string" || typeof value === "number" || typeof value === "boolean" || value === null) {
+      if (typeof value === "string" || typeof value === "number") {
         updates.push(`${field} = ?`);
         params.push(value);
       }
@@ -88,8 +109,6 @@ export async function POST(req: Request) {
     // Also update global settings fallback if user 1
     if (user.id === 1) {
       const allowedKeys = [
-        "currency_symbol",
-        "currency_code",
         "app_name",
         "budget_al_pedo_limit",
         "budget_variable_limit",

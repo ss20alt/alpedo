@@ -18,12 +18,12 @@ interface ChallengeTabProps {
 }
 
 export default function ChallengeTab({ currencySymbol }: ChallengeTabProps) {
-  const [salary, setSalary] = useState<number>(3044000);
+  const [salary, setSalary] = useState<number>(0);
   const [startMonth, setStartMonth] = useState<string>(getParaguayMonthString());
   const [completedMonths, setCompletedMonths] = useState<number[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [loadError, setLoadError] = useState("");
-  const [salaryDraft, setSalaryDraft] = useState("3044000");
+  const [salaryDraft, setSalaryDraft] = useState("");
   const [startMonthDraft, setStartMonthDraft] = useState(getParaguayMonthString());
   const [isSavingConfig, setIsSavingConfig] = useState(false);
   const [savingMonthIndex, setSavingMonthIndex] = useState<number | null>(null);
@@ -218,7 +218,9 @@ export default function ChallengeTab({ currencySymbol }: ChallengeTabProps) {
               {currencySymbol} {formatMoney(totalPotentialSaved)}
             </div>
             <div className="text-[10px] text-slate-500 font-medium mt-1">
-              Al completar, habrás separado el 78% de un sueldo mensual
+              {previewSalary > 0
+                ? "Al completar, habrás separado el 78% de un sueldo mensual"
+                : "Ingresá tu salario para calcular el plan"}
             </div>
           </div>
         </div>
@@ -308,7 +310,7 @@ export default function ChallengeTab({ currencySymbol }: ChallengeTabProps) {
             </label>
             <div className="flex flex-wrap gap-2">
               {[
-                { label: "Mínimo (₲ 3.044.000)", val: 3044000 },
+                { label: "₲ 3M", val: 3000000 },
                 { label: "₲ 4M", val: 4000000 },
                 { label: "₲ 5M", val: 5000000 },
                 { label: "₲ 7.5M", val: 7500000 },

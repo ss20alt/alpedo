@@ -13,6 +13,7 @@ import {
   Trophy,
   UserRoundPlus,
 } from "lucide-react";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
 interface FriendStreak {
   friend_code: string;
@@ -48,6 +49,7 @@ export default function StreaksTab() {
   const [inputFriendName, setInputFriendName] = useState("");
   const [isAdding, setIsAdding] = useState(false);
   const [pendingDeleteCode, setPendingDeleteCode] = useState<string | null>(null);
+  const [friendToDelete, setFriendToDelete] = useState<FriendStreak | null>(null);
 
   const fetchStreaksData = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true);
@@ -135,7 +137,7 @@ export default function StreaksTab() {
   };
 
   const handleDeleteFriend = async (friend: FriendStreak) => {
-    if (!window.confirm(`¿Eliminar el duelo con ${friend.friend_name}?`)) return;
+    setFriendToDelete(null);
     setPendingDeleteCode(friend.friend_code);
     setActionError("");
     setFeedback("");
@@ -393,7 +395,7 @@ export default function StreaksTab() {
                 <div className="mt-3 flex justify-end border-t border-slate-200/70 pt-2">
                   <button
                     type="button"
-                    onClick={() => void handleDeleteFriend(friend)}
+                    onClick={() => setFriendToDelete(friend)}
                     disabled={pendingDeleteCode === friend.friend_code}
                     className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl px-3 text-xs font-bold text-slate-500 transition hover:bg-rose-50 hover:text-rose-700 active:scale-[0.98] disabled:opacity-60"
                     aria-label={`Eliminar duelo con ${friend.friend_name}`}
@@ -419,6 +421,7 @@ export default function StreaksTab() {
           </p>
         </div>
       </section>
+      {friendToDelete && <ConfirmDialog title="¿Eliminar este duelo?" description={`Se quitará el duelo con ${friendToDelete.friend_name}.`} confirmLabel="Eliminar" destructive onCancel={() => setFriendToDelete(null)} onConfirm={() => void handleDeleteFriend(friendToDelete)} />}
     </div>
   );
 }

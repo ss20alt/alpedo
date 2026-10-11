@@ -12,7 +12,7 @@ interface ChallengeRow {
   updated_at: string;
 }
 
-const defaultSalary = 3044000;
+const defaultSalary = 0;
 
 function getChallengeId(userId: number) {
   // Preserve the legacy row for user 1 while keeping each additional account separate.
@@ -90,6 +90,9 @@ export async function POST(req: Request) {
         startMonth = body.start_month;
       }
     } else if (action === "toggle_month") {
+      if (salary <= 0) {
+        return NextResponse.json({ error: "Configurá y guardá tu salario antes de marcar aportes" }, { status: 400 });
+      }
       const monthIndex = Number(body.month_index);
       if (!Number.isInteger(monthIndex) || monthIndex < 1 || monthIndex > 12) {
         return NextResponse.json({ error: "El mes seleccionado no es válido" }, { status: 400 });

@@ -31,10 +31,6 @@ COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
 
-# Directorio de persistencia para SQLite
-RUN mkdir -p /app/data
-VOLUME ["/app/data"]
-
 EXPOSE 3000
 
 CMD ["npm", "start"]

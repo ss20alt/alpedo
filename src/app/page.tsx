@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import dynamic from "next/dynamic";
 import {
   LayoutDashboard,
   Calculator,
@@ -26,27 +27,47 @@ import {
 } from "lucide-react";
 import { Transaction, FinancialMetrics } from "@/lib/finance-engine";
 import PinModal from "@/components/PinModal";
-import TransactionModal, { TransactionPreset } from "@/components/TransactionModal";
+import type { TransactionPreset } from "@/components/TransactionModal";
 import CopilotDashboard from "@/components/CopilotDashboard";
-import LoanSimulator from "@/components/LoanSimulator";
-import TransactionsList from "@/components/TransactionsList";
-import SettingsTab from "@/components/SettingsTab";
-import ChallengeTab from "@/components/ChallengeTab";
-import CueroModal from "@/components/CueroModal";
-import CouplesTab from "@/components/CouplesTab";
-import StreaksTab from "@/components/StreaksTab";
-import InteractiveTour, { type TourStep } from "@/components/InteractiveTour";
+import type { TourStep } from "@/components/InteractiveTour";
 import { triggerHaptic } from "@/lib/haptics";
 import FinanceIcon from "@/components/FinanceIcon";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import { formatParaguayMonthLabel, getParaguayMonthString } from "@/lib/date-utils";
+
+const sectionLoading = () => (
+  <div className="rounded-[24px] bg-white p-6 text-center text-sm text-slate-600" role="status">
+    Cargando sección…
+  </div>
+);
+const TransactionModal = dynamic(() => import("@/components/TransactionModal"), { loading: sectionLoading });
+const LoanSimulator = dynamic(() => import("@/components/LoanSimulator"), { loading: sectionLoading });
+const TransactionsList = dynamic(() => import("@/components/TransactionsList"), { loading: sectionLoading });
+const SettingsTab = dynamic(() => import("@/components/SettingsTab"), { loading: sectionLoading });
+const ChallengeTab = dynamic(() => import("@/components/ChallengeTab"), { loading: sectionLoading });
+const CueroModal = dynamic(() => import("@/components/CueroModal"), { loading: sectionLoading });
+const CouplesTab = dynamic(() => import("@/components/CouplesTab"), { loading: sectionLoading });
+const StreaksTab = dynamic(() => import("@/components/StreaksTab"), { loading: sectionLoading });
+const InteractiveTour = dynamic(() => import("@/components/InteractiveTour"), { loading: sectionLoading });
+
+function PrivateSection() {
+  return (
+    <div className="rounded-[24px] border border-slate-200 bg-white px-5 py-10 text-center shadow-sm" role="status">
+      <EyeOff className="mx-auto h-7 w-7 text-[#1656DB]" aria-hidden="true" />
+      <h2 className="mt-3 text-base font-bold text-slate-900">Contenido oculto</h2>
+      <p className="mt-1 text-sm text-slate-600">Tocá el ojo en la barra superior para ver esta sección.</p>
+    </div>
+  );
+}
 
 export default function Home() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [currentUser, setCurrentUser] = useState<{ id: number; name: string; email: string } | null>(null);
   const [isPinConfigured, setIsPinConfigured] = useState<boolean>(true);
   const [authLoading, setAuthLoading] = useState<boolean>(true);
+  const [authError, setAuthError] = useState(false);
 
-  const [currentTab, setCurrentTab] = useState<TourStep["targetTab"]>("dashboard");
+  const [currentTab, setCurrentTabState] = useState<TourStep["targetTab"]>("dashboard");
   const [selectedMonth, setSelectedMonth] = useState<string>(() => {
     return getParaguayMonthString();
   });
@@ -62,19 +83,19 @@ export default function Home() {
   const [recurringExpenses, setRecurringExpenses] = useState<Transaction[]>([]);
   const [availableMonths, setAvailableMonths] = useState<string[]>([]);
   const [dataLoading, setDataLoading] = useState<boolean>(false);
+  const [dataError, setDataError] = useState<string | null>(null);
 
   const [currencySymbol, setCurrencySymbol] = useState<string>("₲");
-  const [currencyCode, setCurrencyCode] = useState<string>("PYG");
 
   const [budgetAlPedoLimit, setBudgetAlPedoLimit] = useState<number>(500000);
   const [budgetVariableLimit, setBudgetVariableLimit] = useState<number>(1500000);
   const [emergencyFundSaved, setEmergencyFundSaved] = useState<number>(0);
 
   // Bank Account & Portfolio Customization
-  const [accountBank, setAccountBank] = useState<string>("BANCO ITAÚ");
-  const [accountType, setAccountType] = useState<string>("Caja de Ahorro Principal");
-  const [accountLast4, setAccountLast4] = useState<string>("4291");
-  const [accountBaseBalance, setAccountBaseBalance] = useState<number>(2500000);
+  const [accountBank, setAccountBank] = useState<string>("");
+  const [accountType, setAccountType] = useState<string>("");
+  const [accountLast4, setAccountLast4] = useState<string>("");
+  const [accountBaseBalance, setAccountBaseBalance] = useState<number>(0);
 
   // Active filter pass-through for Transactions tab
   const [txFilterCategory, setTxFilterCategory] = useState<string>("all");
@@ -82,11 +103,18 @@ export default function Home() {
 
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [initialPreset, setInitialPreset] = useState<TransactionPreset | null>(null);
   const [isCueroOpen, setIsCueroOpen] = useState<boolean>(false);
   const [isToolsSheetOpen, setIsToolsSheetOpen] = useState<boolean>(false);
   const [isTourOpen, setIsTourOpen] = useState<boolean>(false);
   const [privacyMode, setPrivacyMode] = useState<boolean>(false);
+  const setCurrentTab = (tab: TourStep["targetTab"]) => {
+    if (tab !== "transactions" && tab !== "grouped") {
+      setSelectedMonth((month) => month === "all" ? getParaguayMonthString() : month);
+    }
+    setCurrentTabState(tab);
+  };
   const tabsContainerRef = React.useRef<HTMLDivElement>(null);
   const [tabScrollEdges, setTabpcrollEdges] = useState({ left: false, right: true });
 
@@ -110,25 +138,12 @@ export default function Home() {
   const touchPullStartY = React.useRef<number | null>(null);
 
   useEffect(() => {
+    if (!currentUser?.id) return;
     const timer = window.setTimeout(() => {
-      setPrivacyMode(localStorage.getItem("alpedo_privacy_mode") === "true");
+      setPrivacyMode(localStorage.getItem(`alpedo_privacy_mode_${currentUser.id}`) === "true");
     }, 0);
     return () => window.clearTimeout(timer);
-  }, []);
-
-  // First-time interactive guided tour auto-trigger
-  useEffect(() => {
-    if (isAuthenticated && typeof window !== "undefined") {
-      const tourCompleted = localStorage.getItem("alpedo_tour_completed");
-      if (tourCompleted !== "true") {
-        const timer = setTimeout(() => {
-          setIsTourOpen(true);
-        }, 700);
-        return () => clearTimeout(timer);
-      }
-    }
-  }, [isAuthenticated]);
-
+  }, [currentUser?.id]);
 
   const handleNavigateTab = useCallback((tab: TourStep["targetTab"]) => {
     setCurrentTab(tab);
@@ -168,7 +183,9 @@ export default function Home() {
   const checkAuth = useCallback(async () => {
     try {
       setAuthLoading(true);
-      const res = await fetch("/api/auth");
+      setAuthError(false);
+      const res = await fetch("/api/auth", { signal: AbortSignal.timeout(12000), cache: "no-store" });
+      if (!res.ok) throw new Error("No se pudo verificar la sesión");
       const data = await res.json();
       setIsAuthenticated(data.authenticated);
       setIsPinConfigured(data.isPinConfigured);
@@ -180,6 +197,7 @@ export default function Home() {
     } catch {
       setIsAuthenticated(false);
       setCurrentUser(null);
+      setAuthError(true);
     } finally {
       setAuthLoading(false);
     }
@@ -195,13 +213,12 @@ export default function Home() {
       if (res.ok) {
         const data = await res.json();
         if (data.currency_symbol) setCurrencySymbol(data.currency_symbol);
-        if (data.currency_code) setCurrencyCode(data.currency_code);
         if (data.budget_al_pedo_limit !== undefined) setBudgetAlPedoLimit(Number(data.budget_al_pedo_limit) || 500000);
         if (data.budget_variable_limit !== undefined) setBudgetVariableLimit(Number(data.budget_variable_limit) || 1500000);
         if (data.emergency_fund_saved !== undefined) setEmergencyFundSaved(Number(data.emergency_fund_saved) || 0);
-        if (data.account_bank) setAccountBank(data.account_bank);
-        if (data.account_type) setAccountType(data.account_type);
-        if (data.account_last4) setAccountLast4(data.account_last4);
+        setAccountBank(data.account_bank || "");
+        setAccountType(data.account_type || "");
+        setAccountLast4(data.account_last4 || "");
         if (data.account_base_balance !== undefined) setAccountBaseBalance(Number(data.account_base_balance) || 0);
       }
     } catch {
@@ -271,8 +288,9 @@ export default function Home() {
   const fetchData = useCallback(async (forcedMonth?: string) => {
     try {
       setDataLoading(true);
+      setDataError(null);
       const targetMonth = forcedMonth !== undefined ? forcedMonth : selectedMonth;
-      const res = await fetch(`/api/transactions?month=${targetMonth}`);
+      const res = await fetch(`/api/transactions?month=${targetMonth}`, { signal: AbortSignal.timeout(12000), cache: "no-store" });
       if (res.status === 401) {
         setIsAuthenticated(false);
         return;
@@ -286,9 +304,11 @@ export default function Home() {
         if (data.availableMonths && data.availableMonths.length > 0) {
           setAvailableMonths(data.availableMonths);
         }
-      }
+      } else throw new Error("No se pudieron cargar los movimientos");
     } catch {
-      // ignore
+      setMetrics(null);
+      setTransactions([]);
+      setDataError("No pudimos cargar tus datos. Revisá la conexión e intentá de nuevo.");
     } finally {
       setDataLoading(false);
     }
@@ -317,6 +337,9 @@ export default function Home() {
       });
       setIsAuthenticated(false);
       setCurrentUser(null);
+      setMetrics(null);
+      setTransactions([]);
+      setPrivacyMode(false);
     } catch {
       // ignore
     }
@@ -324,15 +347,21 @@ export default function Home() {
 
   const handleDeleteTransaction = async (id: string) => {
     triggerHaptic("warning");
-    if (!confirm("¿Eliminar este movimiento?")) return;
+    setPendingDeleteId(id);
+  };
+
+  const confirmDeleteTransaction = async () => {
+    const id = pendingDeleteId;
+    if (!id) return;
+    setPendingDeleteId(null);
     try {
       const res = await fetch(`/api/transactions?id=${id}`, { method: "DELETE" });
       if (res.ok) {
         triggerHaptic("medium");
-        fetchData();
-      }
+        void fetchData();
+      } else setDataError("No se pudo eliminar el movimiento. Intentá de nuevo.");
     } catch {
-      // ignore
+      setDataError("Sin conexión. El movimiento no se eliminó.");
     }
   };
 
@@ -369,11 +398,10 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...tx, category: nextCat }),
       });
-      if (res.ok) {
-        fetchData();
-      }
+      if (!res.ok) throw new Error("No se pudo actualizar");
+      await fetchData();
     } catch {
-      fetchData();
+      await fetchData();
     }
   };
 
@@ -430,15 +458,17 @@ export default function Home() {
   }
 
   if (!isAuthenticated) {
+    if (authError) return <div className="app-viewport flex items-center justify-center bg-[#EEF2F8] px-5">
+      <div role="alert" className="w-full max-w-sm rounded-[28px] bg-white p-6 text-center shadow-lg">
+        <h1 className="text-lg font-black text-slate-900">No pudimos conectar</h1>
+        <p className="mt-2 text-sm text-slate-600">Revisá tu conexión y volvé a intentar.</p>
+        <button type="button" onClick={() => void checkAuth()} className="mt-5 h-11 w-full rounded-xl bg-[#1656DB] text-sm font-bold text-white">Reintentar</button>
+      </div>
+    </div>;
     return (
       <PinModal
         isConfigured={isPinConfigured}
-        onAuthenticated={() => {
-          setIsAuthenticated(true);
-          checkAuth();
-          fetchSettings();
-          fetchData();
-        }}
+        onAuthenticated={() => void checkAuth()}
       />
     );
   }
@@ -506,7 +536,7 @@ export default function Home() {
                 triggerHaptic("selection");
                 setPrivacyMode(next);
                 if (typeof window !== "undefined") {
-                  localStorage.setItem("alpedo_privacy_mode", next ? "true" : "false");
+                  if (currentUser?.id) localStorage.setItem(`alpedo_privacy_mode_${currentUser.id}`, next ? "true" : "false");
                 }
               }}
               className={`flex h-11 w-11 items-center justify-center rounded-full transition active:scale-95 ${
@@ -648,7 +678,11 @@ export default function Home() {
             <div className="relative shrink-0">
               <select
                 value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value)}
+                onChange={(e) => {
+                  const month = e.target.value;
+                  if (month === "all") setCurrentTab("transactions");
+                  setSelectedMonth(month);
+                }}
                 aria-label="Mes de movimientos"
                 title="Elegir mes"
                 className="h-10 w-24 appearance-none rounded-full border border-white/35 bg-white/15 pl-8 pr-2 text-xs font-extrabold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 cursor-pointer backdrop-blur-md hover:bg-white/25 transition"
@@ -663,7 +697,7 @@ export default function Home() {
                       {formatParaguayMonthLabel(m)}
                     </option>
                   ))}
-                <option value="all" className="text-slate-900 bg-white">Histórico</option>
+                <option value="all" className="text-slate-900 bg-white">Todos</option>
               </select>
               <Calendar aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/85" />
             </div>
@@ -701,6 +735,11 @@ export default function Home() {
         style={{ overflowAnchor: "none" }}
         className="mx-auto w-full max-w-lg sm:max-w-2xl md:max-w-4xl flex-1 px-3 sm:px-6 py-4 pb-28 md:pb-12"
       >
+        {dataError && <div role="alert" className="mb-4 rounded-2xl border border-rose-200 bg-white p-4 text-sm text-slate-800 shadow-sm">
+          <p className="font-bold">No pudimos completar la acción</p>
+          <p className="mt-1 text-xs text-slate-600">{dataError}</p>
+          <button type="button" onClick={() => void fetchData()} className="mt-3 h-11 rounded-xl bg-[#1656DB] px-5 text-xs font-bold text-white">Reintentar</button>
+        </div>}
         {dataLoading && !metrics ? (
           <div className="flex h-64 items-center justify-center text-slate-400">
             <div className="h-8 w-8 animate-spin rounded-full border-3 border-blue-600 border-t-transparent" />
@@ -710,6 +749,7 @@ export default function Home() {
             {/* Monthly dashboard */}
             {currentTab === "dashboard" && metrics && (
               <CopilotDashboard
+                userId={currentUser?.id ?? 0}
                 metrics={metrics}
                 transactions={transactions}
                 monthlyHistory={monthlyHistory}
@@ -759,7 +799,7 @@ export default function Home() {
             )}
 
             {/* Fallback si no hay métricas disponibles aún */}
-            {currentTab === "dashboard" && !metrics && !dataLoading && (
+            {currentTab === "dashboard" && !metrics && !dataLoading && !dataError && (
               <div className="flex flex-col items-center justify-center p-12 text-center rounded-[28px] border border-slate-100 bg-white shadow-[0_4px_24px_rgba(0,0,0,0.03)] my-8">
                 <p className="text-slate-600 text-sm font-semibold">No se encontraron movimientos registrados para este mes.</p>
                 <div className="mt-4 flex items-center gap-3">
@@ -784,22 +824,22 @@ export default function Home() {
 
             {/* 2. METAS EN PAREJA VIEW */}
             {currentTab === "couples" && (
-              <CouplesTab currencySymbol={currencySymbol} />
+              privacyMode ? <PrivateSection /> : <CouplesTab currencySymbol={currencySymbol} />
             )}
 
             {/* 3. RACHAS & DUELOS VIEW */}
             {currentTab === "streaks" && (
-              <StreaksTab />
+              privacyMode ? <PrivateSection /> : <StreaksTab />
             )}
 
             {/* 4. LOANS SIMULATOR VIEW */}
             {currentTab === "loans" && metrics && (
-              <LoanSimulator metrics={metrics} currencySymbol={currencySymbol} />
+              privacyMode ? <PrivateSection /> : <LoanSimulator metrics={metrics} currencySymbol={currencySymbol} />
             )}
 
             {/* 5. RETO 1% VIEW */}
             {currentTab === "challenge" && (
-              <ChallengeTab currencySymbol={currencySymbol} />
+              privacyMode ? <PrivateSection /> : <ChallengeTab currencySymbol={currencySymbol} />
             )}
 
             {/* 6. TRANSACTIONS VIEW */}
@@ -834,14 +874,8 @@ export default function Home() {
 
             {/* 8. SETTINGS VIEW */}
             {currentTab === "settings" && (
-              <SettingsTab
+              privacyMode ? <PrivateSection /> : <SettingsTab
                 currentUser={currentUser}
-                currencySymbol={currencySymbol}
-                currencyCode={currencyCode}
-                onSettingsSaved={(sym, cod) => {
-                  setCurrencySymbol(sym);
-                  setCurrencyCode(cod);
-                }}
                 onRefreshData={fetchData}
                 onLogout={handleLogout}
                 onStartTour={() => setIsTourOpen(true)}
@@ -1068,6 +1102,7 @@ export default function Home() {
 
       {/* Transaction Modal (Bottom Sheet on mobile with native gestures) */}
       <TransactionModal
+        userId={currentUser?.id ?? 0}
         isOpen={isModalOpen}
         onClose={() => {
           setIsModalOpen(false);
@@ -1085,17 +1120,17 @@ export default function Home() {
         isOpen={isCueroOpen}
         onClose={() => setIsCueroOpen(false)}
         currencySymbol={currencySymbol}
-        budgetAlPedoLimit={budgetAlPedoLimit}
-        budgetVariableLimit={budgetVariableLimit}
         onTransactionCreated={fetchData}
       />
 
       {/* Interactive Onboarding Tour */}
       <InteractiveTour
+        userId={currentUser?.id ?? 0}
         isOpen={isTourOpen}
         onClose={() => setIsTourOpen(false)}
         onNavigateTab={handleNavigateTab}
       />
+      {pendingDeleteId && <ConfirmDialog title="¿Eliminar este movimiento?" description="Se quitará de tus gastos o ingresos y no podrás recuperarlo desde la app." confirmLabel="Eliminar" destructive onCancel={() => setPendingDeleteId(null)} onConfirm={() => void confirmDeleteTransaction()} />}
     </div>
   );
 }

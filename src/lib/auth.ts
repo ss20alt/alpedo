@@ -3,7 +3,8 @@ import db from "./db";
 import { cookies } from "next/headers";
 
 const SESSION_COOKIE_NAME = "finanzas_auth_session";
-const COOKIE_SECRET = process.env.SESSION_SECRET || "finanzas-secret-key-production-change-me";
+let sessionsReady: Promise<void> | null = null;
+let recoveryReady: Promise<void> | null = null;
 
 export interface User {
   id: number;
@@ -23,297 +24,180 @@ export interface User {
 }
 
 export function hashPin(pin: string): string {
-  return crypto.createHash("sha256").update(pin.trim()).digest("hex");
+  const salt = crypto.randomBytes(16).toString("hex");
+  return `scrypt:${salt}:${crypto.scryptSync(pin, salt, 64).toString("hex")}`;
 }
 
-export function signToken(data: string): string {
-  const hmac = crypto.createHmac("sha256", COOKIE_SECRET);
-  hmac.update(data);
-  const signature = hmac.digest("hex");
-  return `${data}.${signature}`;
+function pinMatches(pin: string, stored: string): boolean {
+  try {
+    const parts = stored.split(":");
+    const expected = parts.length === 3 && parts[0] === "scrypt"
+      ? Buffer.from(parts[2], "hex")
+      : Buffer.from(stored, "hex");
+    const actual = parts.length === 3 && parts[0] === "scrypt"
+      ? crypto.scryptSync(pin, parts[1], expected.length)
+      : crypto.createHash("sha256").update(pin).digest();
+    return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
+  } catch { return false; }
 }
 
-export function verifyToken(token: string): boolean {
-  if (!token || !token.includes(".")) return false;
-  const [data, signature] = token.split(".");
-  if (!data || !signature) return false;
-  const hmac = crypto.createHmac("sha256", COOKIE_SECRET);
-  hmac.update(data);
-  const expectedSig = hmac.digest("hex");
-  if (signature.length !== expectedSig.length) return false;
-  return crypto.timingSafeEqual(Buffer.from(signature, "utf-8"), Buffer.from(expectedSig, "utf-8"));
+async function ensureSessionsTable() {
+  if (!sessionsReady) {
+    sessionsReady = db.execute(`CREATE TABLE IF NOT EXISTS auth_sessions (
+      token_hash CHAR(64) PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      expires_at TIMESTAMPTZ NOT NULL
+    )`).then(() => undefined).catch((error) => {
+      sessionsReady = null;
+      throw error;
+    });
+  }
+  await sessionsReady;
+}
+
+async function ensureRecoveryTable() {
+  if (!recoveryReady) {
+    recoveryReady = db.execute(`CREATE TABLE IF NOT EXISTS auth_recovery_codes (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      code_hash CHAR(64) NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`).then(() => undefined).catch((error) => {
+      recoveryReady = null;
+      throw error;
+    });
+  }
+  await recoveryReady;
+}
+
+export async function createRecoveryCode(user: User, currentPin: string): Promise<string | null> {
+  if (!pinMatches(currentPin.trim(), user.pin_hash)) return null;
+  await ensureRecoveryTable();
+  const raw = crypto.randomBytes(16).toString("hex").toUpperCase();
+  const code = raw.match(/.{1,8}/g)!.join("-");
+  await db.execute(
+    `INSERT INTO auth_recovery_codes (user_id, code_hash, created_at) VALUES (?, ?, NOW())
+     ON CONFLICT (user_id) DO UPDATE SET code_hash = EXCLUDED.code_hash, created_at = NOW()`,
+    [user.id, crypto.createHash("sha256").update(raw.toLowerCase()).digest("hex")]
+  );
+  return code;
+}
+
+export async function resetPinWithRecovery(email: string, code: string, newPin: string): Promise<boolean> {
+  const normalized = code.replace(/[-\s]/g, "").toLowerCase();
+  if (!/^[0-9a-f]{32}$/.test(normalized) || !/^\d{6,12}$/.test(newPin)) return false;
+  const user = await db.queryOne<User>("SELECT * FROM users WHERE LOWER(email) = LOWER(?)", [email.trim()]);
+  if (!user) return false;
+  await ensureRecoveryTable();
+  await ensureSessionsTable();
+  const codeHash = crypto.createHash("sha256").update(normalized).digest("hex");
+  return db.withTransaction(async () => {
+    const consumed = await db.execute(
+      "DELETE FROM auth_recovery_codes WHERE user_id = ? AND code_hash = ?",
+      [user.id, codeHash]
+    );
+    if (consumed !== 1) return false;
+    await db.execute("UPDATE users SET pin_hash = ? WHERE id = ?", [hashPin(newPin), user.id]);
+    await db.execute("DELETE FROM auth_sessions WHERE user_id = ?", [user.id]);
+    return true;
+  });
 }
 
 export async function isPinConfigured(): Promise<boolean> {
-  // Check if at least 1 user exists or settings pin
-  try {
-    const userCount = await db.queryOne<{ count: string }>("SELECT COUNT(*) as count FROM users");
-    if (parseInt(userCount?.count || "0", 10) > 0) return true;
-  } catch {
-    // ignore
-  }
-
-  if (process.env.APP_PIN) return true;
-
-  try {
-    const row = await db.queryOne<{ value: string }>("SELECT value FROM settings WHERE key = 'pin_hash'");
-    return Boolean(row?.value);
-  } catch {
-    return false;
-  }
+  const row = await db.queryOne<{ count: string }>("SELECT COUNT(*) AS count FROM users");
+  return Number(row?.count || 0) > 0;
 }
 
 export async function getCurrentUser(): Promise<User | null> {
   try {
-    const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
-    if (!sessionCookie?.value) return null;
-    if (!verifyToken(sessionCookie.value)) return null;
-
-    const [data] = sessionCookie.value.split(".");
-    let userId = 1;
-
-    if (data.startsWith("uid_")) {
-      const parts = data.split("_");
-      const parsed = parseInt(parts[1], 10);
-      if (!isNaN(parsed)) userId = parsed;
-    }
-
-    const user = await db.queryOne<User>("SELECT * FROM users WHERE id = ?", [userId]);
-    return user || null;
-  } catch {
-    return null;
-  }
+    const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
+    if (!token || !/^[0-9a-f]{64}$/.test(token)) return null;
+    await ensureSessionsTable();
+    return await db.queryOne<User>(
+      `SELECT u.* FROM auth_sessions s JOIN users u ON u.id = s.user_id
+       WHERE s.token_hash = ? AND s.expires_at > NOW()`,
+      [crypto.createHash("sha256").update(token).digest("hex")]
+    );
+  } catch { return null; }
 }
 
-export async function verifyUserLogin(
-  emailOrPin: string,
-  explicitPin?: string
-): Promise<{ success: boolean; user?: User; error?: string }> {
-  const cleanInput = emailOrPin.trim();
-
+export async function verifyUserLogin(email: string, pin: string): Promise<{ success: boolean; user?: User; error?: string }> {
+  if (!email.trim() || !pin) return { success: false, error: "Ingresá tu correo y PIN" };
   try {
-    // Case 1: Email + PIN provided
-    if (explicitPin !== undefined) {
-      const user = await db.queryOne<User>(
-        "SELECT * FROM users WHERE LOWER(email) = LOWER(?)",
-        [cleanInput]
-      );
-      if (!user) {
-        return { success: false, error: "Usuario o correo no encontrado" };
-      }
-      const enteredHash = hashPin(explicitPin);
-      if (
-        enteredHash.length === user.pin_hash.length &&
-        crypto.timingSafeEqual(Buffer.from(enteredHash, "utf-8"), Buffer.from(user.pin_hash, "utf-8"))
-      ) {
-        return { success: true, user };
-      }
-      return { success: false, error: "PIN incorrecto" };
+    const user = await db.queryOne<User>("SELECT * FROM users WHERE LOWER(email) = LOWER(?)", [email.trim()]);
+    if (!user) {
+      crypto.scryptSync(pin.trim(), "unknown-account-salt", 64);
+      return { success: false, error: "Correo o PIN incorrecto" };
     }
-
-    // Case 2: Only 4-digit PIN provided (Direct unlock)
-    // Check against user 1 first (default demo user) or matching users
-    const enteredHash = hashPin(cleanInput);
-    const users = await db.query<User>("SELECT * FROM users ORDER BY id ASC");
-
-    // Match exact hash
-    for (const u of users) {
-      if (
-        enteredHash.length === u.pin_hash.length &&
-        crypto.timingSafeEqual(Buffer.from(enteredHash, "utf-8"), Buffer.from(u.pin_hash, "utf-8"))
-      ) {
-        return { success: true, user: u };
-      }
+    if (!pinMatches(pin.trim(), user.pin_hash)) {
+      return { success: false, error: "Correo o PIN incorrecto" };
     }
-
-    // Also check env pin fallback
-    if (process.env.APP_PIN) {
-      const envPin = process.env.APP_PIN.trim();
-      if (
-        cleanInput.length === envPin.length &&
-        crypto.timingSafeEqual(Buffer.from(cleanInput, "utf-8"), Buffer.from(envPin, "utf-8"))
-      ) {
-        const u1 = users[0] || (await db.queryOne<User>("SELECT * FROM users WHERE id = 1"));
-        if (u1) return { success: true, user: u1 };
-      }
+    if (!user.pin_hash.startsWith("scrypt:")) {
+      await db.execute("UPDATE users SET pin_hash = ? WHERE id = ?", [hashPin(pin.trim()), user.id]);
     }
-
-    return { success: false, error: "PIN incorrecto" };
-  } catch {
-    return { success: false, error: "Error en base de datos al autenticar" };
-  }
+    return { success: true, user };
+  } catch { return { success: false, error: "No se pudo iniciar sesión" }; }
 }
 
-export async function registerUser(
-  name: string,
-  email: string,
-  pin: string
-): Promise<{ success: boolean; user?: User; error?: string }> {
+export async function registerUser(name: string, email: string, pin: string): Promise<{ success: boolean; user?: User; error?: string }> {
   const cleanName = name.trim();
   const cleanEmail = email.trim().toLowerCase();
-  const cleanPin = pin.trim();
-
-  if (!cleanName || cleanName.length < 2) {
-    return { success: false, error: "El nombre debe tener al menos 2 caracteres" };
-  }
-  if (!cleanEmail || !cleanEmail.includes("@")) {
-    return { success: false, error: "Ingresá un correo electrónico válido" };
-  }
-  if (!cleanPin || cleanPin.length < 4) {
-    return { success: false, error: "El PIN debe tener al menos 4 números o caracteres" };
-  }
-
+  if (cleanName.length < 2 || cleanName.length > 100) return { success: false, error: "Ingresá un nombre de 2 a 100 caracteres" };
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) return { success: false, error: "Ingresá un correo válido" };
+  if (!/^\d{6,12}$/.test(pin)) return { success: false, error: "Elegí un PIN de 6 a 12 números" };
   try {
-    // Check if email already exists
-    const existing = await db.queryOne<{ id: number }>(
-      "SELECT id FROM users WHERE LOWER(email) = LOWER(?)",
-      [cleanEmail]
+    const user = await db.queryOne<User>(
+      `INSERT INTO users (name, email, pin_hash, currency_symbol, currency_code,
+       budget_al_pedo_limit, budget_variable_limit, emergency_fund_saved,
+       account_bank, account_type, account_last4, account_base_balance)
+       VALUES (?, ?, ?, '₲', 'PYG', 500000, 1500000, 0, '', '', '', 0)
+       RETURNING *`,
+      [cleanName, cleanEmail, hashPin(pin)]
     );
-    if (existing) {
-      return { success: false, error: "Este correo ya está registrado. Probá iniciar sesión con tu PIN." };
+    return user ? { success: true, user } : { success: false, error: "No se pudo crear la cuenta" };
+  } catch (error: unknown) {
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "23505") {
+      return { success: false, error: "Este correo ya está registrado" };
     }
-
-    const hashedPin = hashPin(cleanPin);
-
-    // Insert user
-    const newUser = await db.queryOne<User>(
-      `INSERT INTO users (
-        name, 
-        email, 
-        pin_hash, 
-        currency_symbol, 
-        currency_code, 
-        budget_al_pedo_limit, 
-        budget_variable_limit, 
-        emergency_fund_saved, 
-        account_bank, 
-        account_type, 
-        account_last4, 
-        account_base_balance
-      ) VALUES (?, ?, ?, '₲', 'PYG', 500000, 1500000, 0, 'BANCO ITAÚ', 'Caja de Ahorro Principal', '4291', 2500000)
-      RETURNING *`,
-      [cleanName, cleanEmail, hashedPin]
-    );
-
-    if (!newUser) {
-      return { success: false, error: "No se pudo crear la cuenta" };
-    }
-
-    // Seed realistic initial Paraguayan sample transactions so the user can immediately test!
-    const today = new Date();
-    const curYear = today.getFullYear();
-    const curMonth = String(today.getMonth() + 1).padStart(2, "0");
-    const dStr = (day: number) => `${curYear}-${curMonth}-${String(day).padStart(2, "0")}`;
-
-    const starterTx = [
-      {
-        id: `tx_${newUser.id}_1`,
-        type: "income",
-        category: "fijo",
-        amount: 4500000,
-        description: "Sueldo mensual neto",
-        date: dStr(5),
-        is_recurring: true,
-      },
-      {
-        id: `tx_${newUser.id}_2`,
-        type: "expense",
-        category: "fijo",
-        amount: 1400000,
-        description: "Alquiler / Vivienda",
-        date: dStr(6),
-        is_recurring: true,
-      },
-      {
-        id: `tx_${newUser.id}_3`,
-        type: "expense",
-        category: "variable",
-        amount: 380000,
-        description: "Superseis compras del mes",
-        date: dStr(8),
-        is_recurring: false,
-      },
-      {
-        id: `tx_${newUser.id}_4`,
-        type: "expense",
-        category: "al_pedo",
-        amount: 45000,
-        description: "Lomito y gaseosa nocturna",
-        date: dStr(10),
-        is_recurring: false,
-      },
-      {
-        id: `tx_${newUser.id}_5`,
-        type: "expense",
-        category: "al_pedo",
-        amount: 28000,
-        description: "Bolt regreso a casa",
-        date: dStr(11),
-        is_recurring: false,
-      },
-    ];
-
-    for (const tx of starterTx) {
-      await db.execute(
-        `INSERT INTO transactions (id, type, category, amount, description, date, is_recurring, user_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT (id) DO NOTHING`,
-        [tx.id, tx.type, tx.category, tx.amount, tx.description, tx.date, tx.is_recurring, newUser.id]
-      );
-    }
-
-    return { success: true, user: newUser };
-  } catch (err: unknown) {
-    console.error("Error registering user:", err);
-    return {
-      success: false,
-      error: err instanceof Error ? err.message : "Error al crear la cuenta",
-    };
+    return { success: false, error: "No se pudo crear la cuenta" };
   }
 }
 
-export async function verifyPin(pin: string): Promise<boolean> {
-  const result = await verifyUserLogin(pin);
-  return result.success;
+export async function changePinForUser(user: User, oldPin: string, newPin: string): Promise<boolean> {
+  if (!pinMatches(oldPin.trim(), user.pin_hash) || !/^\d{6,12}$/.test(newPin)) return false;
+  await ensureSessionsTable();
+  await ensureRecoveryTable();
+  await db.withTransaction(async () => {
+    await db.execute("UPDATE users SET pin_hash = ? WHERE id = ?", [hashPin(newPin), user.id]);
+    await db.execute("DELETE FROM auth_sessions WHERE user_id = ?", [user.id]);
+    await db.execute("DELETE FROM auth_recovery_codes WHERE user_id = ?", [user.id]);
+  });
+  return true;
 }
 
-export async function setMasterPin(pin: string): Promise<void> {
-  const hashed = hashPin(pin.trim());
+export async function isAuthenticated(): Promise<boolean> { return (await getCurrentUser()) !== null; }
+export async function checkAuth(): Promise<boolean> { return (await getCurrentUser()) !== null; }
+
+export async function createSessionCookie(userId: number): Promise<string> {
+  await ensureSessionsTable();
+  await db.execute("DELETE FROM auth_sessions WHERE expires_at <= NOW()");
+  const token = crypto.randomBytes(32).toString("hex");
   await db.execute(
-    "INSERT INTO settings (key, value) VALUES ('pin_hash', ?) ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value",
-    [hashed]
+    "INSERT INTO auth_sessions (token_hash, user_id, expires_at) VALUES (?, ?, NOW() + INTERVAL '30 days')",
+    [crypto.createHash("sha256").update(token).digest("hex"), userId]
   );
-  // Also update user 1
-  await db.execute("UPDATE users SET pin_hash = ? WHERE id = 1", [hashed]);
-}
-
-export async function isAuthenticated(): Promise<boolean> {
-  const user = await getCurrentUser();
-  return user !== null;
-}
-
-export async function checkAuth(): Promise<boolean> {
-  const user = await getCurrentUser();
-  return user !== null;
-}
-
-export async function createSessionCookie(userId: number = 1): Promise<string> {
-  const timestamp = Date.now().toString();
-  const token = signToken(`uid_${userId}_${timestamp}`);
-  const cookieStore = await cookies();
-  const isHttps = process.env.ENABLE_HTTPS === "true";
-  cookieStore.set(SESSION_COOKIE_NAME, token, {
-    httpOnly: true,
-    secure: isHttps,
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 30, // 30 days
+  (await cookies()).set(SESSION_COOKIE_NAME, token, {
+    httpOnly: true, secure: process.env.ENABLE_HTTPS === "true", sameSite: "lax",
+    path: "/", maxAge: 60 * 60 * 24 * 30,
   });
   return token;
 }
 
 export async function clearSessionCookie(): Promise<void> {
   const cookieStore = await cookies();
+  const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
+  if (token && /^[0-9a-f]{64}$/.test(token)) {
+    await ensureSessionsTable();
+    await db.execute("DELETE FROM auth_sessions WHERE token_hash = ?", [crypto.createHash("sha256").update(token).digest("hex")]);
+  }
   cookieStore.delete(SESSION_COOKIE_NAME);
 }

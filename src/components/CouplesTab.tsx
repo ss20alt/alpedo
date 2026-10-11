@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import FinanceIcon, { type FinanceIconName } from "@/components/FinanceIcon";
 import { formatParaguayDateLabel, getParaguayDateString } from "@/lib/date-utils";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
 interface CouplesGoal {
   id: number;
@@ -57,6 +58,7 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
   const [copied, setCopied] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [notice, setNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [confirmCloseGoal, setConfirmCloseGoal] = useState(false);
 
   // New goal form state
   const [showNewGoal, setShowNewGoal] = useState(false);
@@ -173,7 +175,7 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
 
   const handleDeleteGoal = async () => {
     if (!goal) return;
-    if (!confirm("¿Querés cerrar esta meta compartida?")) return;
+    setConfirmCloseGoal(false);
 
     try {
       const res = await fetch(`/api/couples?id=${goal.id}`, { method: "DELETE" });
@@ -556,7 +558,7 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
                   {copied ? "¡Copiado!" : "Copiar código"}
                 </button>
                 <button
-                  onClick={handleDeleteGoal}
+                  onClick={() => setConfirmCloseGoal(true)}
                   className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-slate-500 transition hover:bg-rose-50 hover:text-rose-600"
                   aria-label="Cerrar meta compartida"
                   title="Cerrar meta"
@@ -724,6 +726,7 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
           </div>
         </div>
       )}
+      {confirmCloseGoal && <ConfirmDialog title="¿Cerrar esta meta compartida?" description="La meta dejará de mostrarse para ambos participantes. Guardá un respaldo si necesitás conservar el historial." confirmLabel="Cerrar meta" destructive onCancel={() => setConfirmCloseGoal(false)} onConfirm={() => void handleDeleteGoal()} />}
     </div>
   );
 }

@@ -7,11 +7,11 @@ services:
     restart: unless-stopped
     ports:
       - "3000:3000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - SESSION_SECRET=tu-clave-secreta-personal-cambiar-en-produccion
-      # - APP_PIN=1234 # Opcional: Podés forzar el PIN por variable de entorno aquí si querés
-    volumes:
-      # Montaje del volumen para que tu base de datos SQLite persista en el host
-      - ./data:/app/data
+      - DATABASE_URL=${DATABASE_URL:?Configurá DATABASE_URL}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - ENABLE_HTTPS=${ENABLE_HTTPS:-false}

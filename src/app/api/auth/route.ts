@@ -1,33 +1,51 @@
 import { NextResponse } from "next/server";
+import db from "@/lib/db";
 import {
-  isAuthenticated,
   isPinConfigured,
   getCurrentUser,
   verifyUserLogin,
   registerUser,
-  setMasterPin,
+  changePinForUser,
   createSessionCookie,
   clearSessionCookie,
-  verifyPin,
+  createRecoveryCode,
+  resetPinWithRecovery,
 } from "@/lib/auth";
 
-// In-Memory Rate Limiter against brute-force attacks
-interface RateLimitRecord {
-  attempts: number;
-  blockedUntil: number;
+let loginLimitsReady: Promise<void> | null = null;
+
+async function ensureLoginLimits() {
+  if (!loginLimitsReady) {
+    loginLimitsReady = db.execute(`CREATE TABLE IF NOT EXISTS auth_login_limits (
+      email TEXT PRIMARY KEY,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      blocked_until TIMESTAMPTZ
+    )`).then(() => undefined).catch((error) => {
+      loginLimitsReady = null;
+      throw error;
+    });
+  }
+  await loginLimitsReady;
 }
-const loginAttempts = new Map<string, RateLimitRecord>();
+
+async function recordFailedLogin(email: string) {
+  await db.execute(
+    `INSERT INTO auth_login_limits (email, attempts) VALUES (?, 1)
+     ON CONFLICT (email) DO UPDATE SET
+       attempts = CASE
+         WHEN auth_login_limits.blocked_until IS NOT NULL AND auth_login_limits.blocked_until <= NOW()
+         THEN 1 ELSE auth_login_limits.attempts + 1 END,
+       blocked_until = CASE
+         WHEN auth_login_limits.blocked_until IS NOT NULL AND auth_login_limits.blocked_until <= NOW()
+         THEN NULL
+         WHEN auth_login_limits.attempts + 1 >= 5 THEN NOW() + INTERVAL '5 minutes'
+         ELSE NULL END`,
+    [email]
+  );
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function getClientIdentifier(req: Request): string {
-  const forwarded = req.headers.get("x-forwarded-for");
-  if (forwarded) return forwarded.split(",")[0].trim();
-  const realIp = req.headers.get("x-real-ip");
-  if (realIp) return realIp.trim();
-  return "default_client";
 }
 
 export async function GET() {
@@ -46,24 +64,11 @@ export async function GET() {
           currency_code: user.currency_code,
         }
       : null,
-  });
+  }, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function POST(req: Request) {
   try {
-    const clientKey = getClientIdentifier(req);
-    const now = Date.now();
-    const rateLimit = loginAttempts.get(clientKey);
-
-    // Check rate limit timeout
-    if (rateLimit && rateLimit.blockedUntil > now) {
-      const waitSeconds = Math.ceil((rateLimit.blockedUntil - now) / 1000);
-      return NextResponse.json(
-        { error: `Demasiados intentos fallidos. Por seguridad, esperá ${waitSeconds} segundos.` },
-        { status: 429 }
-      );
-    }
-
     let parsedBody: unknown;
     try {
       parsedBody = await req.json();
@@ -81,6 +86,57 @@ export async function POST(req: Request) {
     const pin = typeof body.pin === "string" ? body.pin : "";
     const oldPin = typeof body.oldPin === "string" ? body.oldPin : "";
     const newPin = typeof body.newPin === "string" ? body.newPin : "";
+    const clientKey = email.trim().toLowerCase();
+    if (action === "login" || action === "reset_pin") {
+      if (!clientKey || clientKey.length > 255 || (action === "login" && !pin)) {
+        return NextResponse.json({ error: "Ingresá el correo de tu cuenta" }, { status: 400 });
+      }
+      await ensureLoginLimits();
+      const rateLimit = await db.queryOne<{ blocked_until: Date | null }>(
+        "SELECT blocked_until FROM auth_login_limits WHERE email = ?", [clientKey]
+      );
+      if (rateLimit?.blocked_until && new Date(rateLimit.blocked_until).getTime() > Date.now()) {
+        const waitSeconds = Math.ceil((new Date(rateLimit.blocked_until).getTime() - Date.now()) / 1000);
+        return NextResponse.json(
+          { error: `Demasiados intentos. Esperá ${waitSeconds} segundos.` },
+          { status: 429 }
+        );
+      }
+    }
+
+    if (action === "create_recovery_code") {
+      const user = await getCurrentUser();
+      if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+      const recoveryKey = user.email.toLowerCase();
+      await ensureLoginLimits();
+      const limit = await db.queryOne<{ blocked_until: Date | null }>(
+        "SELECT blocked_until FROM auth_login_limits WHERE email = ?", [recoveryKey]
+      );
+      if (limit?.blocked_until && new Date(limit.blocked_until).getTime() > Date.now()) {
+        return NextResponse.json({ error: "Demasiados intentos. Intentá más tarde." }, { status: 429 });
+      }
+      const code = await createRecoveryCode(user, pin);
+      if (!code) {
+        await recordFailedLogin(recoveryKey);
+        return NextResponse.json({ error: "PIN actual incorrecto" }, { status: 400 });
+      }
+      await db.execute("DELETE FROM auth_login_limits WHERE email = ?", [recoveryKey]);
+      return NextResponse.json({ code }, { headers: { "Cache-Control": "no-store" } });
+    }
+
+    if (action === "reset_pin") {
+      const recoveryCode = typeof body.recoveryCode === "string" ? body.recoveryCode : "";
+      if (!/^\d{6,12}$/.test(newPin)) {
+        return NextResponse.json({ error: "El nuevo PIN debe tener de 6 a 12 números" }, { status: 400 });
+      }
+      const changed = await resetPinWithRecovery(email, recoveryCode, newPin);
+      if (!changed) {
+        await recordFailedLogin(clientKey);
+        return NextResponse.json({ error: "Correo o código de recuperación incorrecto" }, { status: 400 });
+      }
+      await db.execute("DELETE FROM auth_login_limits WHERE email = ?", [clientKey]);
+      return NextResponse.json({ success: true, message: "PIN actualizado. Iniciá sesión con el nuevo PIN." });
+    }
 
     // 1. REGISTRATION (Crear cuenta nueva para probar y compartir)
     if (action === "register") {
@@ -90,8 +146,8 @@ export async function POST(req: Request) {
       if (!email || !email.includes("@")) {
         return NextResponse.json({ error: "Ingresá un correo electrónico válido" }, { status: 400 });
       }
-      if (!pin || pin.trim().length < 4) {
-        return NextResponse.json({ error: "El PIN debe tener al menos 4 números" }, { status: 400 });
+      if (!/^\d{6,12}$/.test(pin)) {
+        return NextResponse.json({ error: "El PIN debe tener entre 6 y 12 números" }, { status: 400 });
       }
 
       const regResult = await registerUser(name, email, pin);
@@ -101,7 +157,8 @@ export async function POST(req: Request) {
 
       // Automatically create session for the registered user
       await createSessionCookie(regResult.user.id);
-      loginAttempts.delete(clientKey);
+      await ensureLoginLimits();
+      await db.execute("DELETE FROM auth_login_limits WHERE email = ?", [clientKey]);
 
       return NextResponse.json({
         success: true,
@@ -114,26 +171,12 @@ export async function POST(req: Request) {
       });
     }
 
-    // 2. LOGIN (Iniciar sesión por Email + PIN o PIN directo)
+    // Login is always scoped to one account.
     if (action === "login") {
-      let authResult;
-      if (email && email.trim().length > 0) {
-        // Login by Email + PIN
-        authResult = await verifyUserLogin(email.trim(), pin ? pin.trim() : "");
-      } else {
-        // Direct PIN keypad unlock
-        authResult = await verifyUserLogin(pin ? pin.trim() : "");
-      }
+      const authResult = await verifyUserLogin(email, pin);
 
       if (!authResult.success || !authResult.user) {
-        // Record failed attempt
-        const record = loginAttempts.get(clientKey) || { attempts: 0, blockedUntil: 0 };
-        record.attempts += 1;
-        if (record.attempts >= 5) {
-          record.blockedUntil = now + 30000; // 30 seconds block
-          record.attempts = 0;
-        }
-        loginAttempts.set(clientKey, record);
+        await recordFailedLogin(clientKey);
 
         return NextResponse.json(
           { error: authResult.error || "PIN o credenciales incorrectas" },
@@ -142,7 +185,7 @@ export async function POST(req: Request) {
       }
 
       // Success
-      loginAttempts.delete(clientKey);
+      await db.execute("DELETE FROM auth_login_limits WHERE email = ?", [clientKey]);
       await createSessionCookie(authResult.user.id);
 
       return NextResponse.json({
@@ -162,34 +205,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true, message: "Sesión cerrada correctamente" });
     }
 
-    // 4. SETUP (Initial pin setup)
-    if (action === "setup") {
-      if (await isPinConfigured()) {
-        return NextResponse.json({ error: "El sistema ya está configurado" }, { status: 400 });
-      }
-      if (!pin || pin.trim().length < 4) {
-        return NextResponse.json({ error: "El PIN debe tener al menos 4 caracteres" }, { status: 400 });
-      }
-      await setMasterPin(pin);
-      await createSessionCookie(1);
-      loginAttempts.delete(clientKey);
-      return NextResponse.json({ success: true, message: "PIN configurado exitosamente" });
-    }
-
-    // 5. CHANGE PIN
+    // Change only the authenticated account's PIN.
     if (action === "change_pin") {
       const user = await getCurrentUser();
       if (!user) {
         return NextResponse.json({ error: "No autorizado" }, { status: 401 });
       }
-      const validOld = await verifyPin(oldPin);
-      if (!validOld) {
+      if (!/^\d{6,12}$/.test(newPin)) {
+        return NextResponse.json({ error: "El nuevo PIN debe tener entre 6 y 12 números" }, { status: 400 });
+      }
+      if (!(await changePinForUser(user, oldPin, newPin))) {
         return NextResponse.json({ error: "El PIN actual es incorrecto" }, { status: 400 });
       }
-      if (!newPin || newPin.trim().length < 4) {
-        return NextResponse.json({ error: "El nuevo PIN debe tener al menos 4 caracteres" }, { status: 400 });
-      }
-      await setMasterPin(newPin);
+      await createSessionCookie(user.id);
       return NextResponse.json({ success: true, message: "PIN actualizado exitosamente" });
     }
 

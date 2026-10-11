@@ -4,6 +4,9 @@ import { getCurrentUser } from "@/lib/auth";
 import crypto from "crypto";
 
 export async function POST() {
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json({ error: "Datos de prueba no disponibles" }, { status: 404 });
+  }
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });

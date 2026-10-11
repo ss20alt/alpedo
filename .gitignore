@@ -39,3 +39,23 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Private financial data and local deployment artifacts
+/data/
+/*dump*.json
+/*backup*/
+/*archive*/
+/src_local_backup/
+/*vps*.js
+/check_*.js
+/fix_*.js
+/query_*.js
+/restore_*.js
+/sync_*.js
+/swap_*.js
+/test_api_tx.js
+/test_pg.js
+/migrate_sqlite_to_pg.py
+/*.tar
+/*.tar.gz
+/*.zip

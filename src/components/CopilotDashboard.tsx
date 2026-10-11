@@ -45,6 +45,7 @@ export interface MonthlyHistoryItem {
 }
 
 interface CopilotDashboardProps {
+  userId: number;
   metrics: FinancialMetrics;
   transactions: Transaction[];
   monthlyHistory?: MonthlyHistoryItem[];
@@ -71,6 +72,7 @@ interface CopilotDashboardProps {
 }
 
 export default function CopilotDashboard({
+  userId,
   metrics,
   transactions,
   monthlyHistory = [],
@@ -80,9 +82,9 @@ export default function CopilotDashboard({
   budgetAlPedoLimit,
   budgetVariableLimit,
   emergencyFundSaved,
-  accountBank = "BANCO ITAÚ",
-  accountType = "Caja de Ahorro Principal",
-  accountLast4 = "4291",
+  accountBank = "",
+  accountType = "",
+  accountLast4 = "",
   accountBaseBalance = 0,
   privacyMode = false,
   onUpdateAccount,
@@ -113,17 +115,17 @@ export default function CopilotDashboard({
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      const stored = localStorage.getItem(`reviewed_month_${selectedMonth}`);
+      const stored = localStorage.getItem(`reviewed_month_${userId}_${selectedMonth}`);
       setReviewed(stored === "true");
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [selectedMonth]);
+  }, [selectedMonth, userId]);
 
   const handleToggleReviewed = () => {
     const next = !reviewed;
     setReviewed(next);
     if (typeof window !== "undefined") {
-      localStorage.setItem(`reviewed_month_${selectedMonth}`, next ? "true" : "false");
+      localStorage.setItem(`reviewed_month_${userId}_${selectedMonth}`, next ? "true" : "false");
     }
   };
 
@@ -147,8 +149,8 @@ export default function CopilotDashboard({
 
 
   // Calculations for Copilot hero card
-  const leftToSpend = Math.max(0, metrics.totalIncome - metrics.totalExpenses);
-  const totalBudgeted = metrics.totalIncome > 0 ? metrics.totalIncome : 3000000;
+  const leftToSpend = metrics.totalIncome - metrics.totalExpenses;
+  const totalBudgeted = metrics.totalIncome;
   const isUnderBudget = metrics.netSavings >= 0;
   const [paraguayYear, paraguayMonth, paraguayDay] = getParaguayDateString().split("-").map(Number);
 
@@ -395,10 +397,9 @@ export default function CopilotDashboard({
     return { timeframeNetSavings: metrics.netSavings, timeframeMargin: metrics.savingsRate, timeframeLabel: "este mes" };
   }, [timeframe, transactions, metrics, monthlyHistory, selectedMonth, paraguayYear, paraguayMonth, paraguayDay]);
 
-  const estimatedNetWorth =
-    (accountBaseBalance || 0) + metrics.netSavings + emergencyFundSaved;
+  const estimatedNetWorth = accountBaseBalance || 0;
 
-  // Upcoming recurring expenses computed dynamically
+  // Registered recurring expenses; dates alone do not confirm payment.
   const upcomingBills = useMemo(() => {
     const today = Number(getParaguayDateString().split("-")[2]);
     return recurringExpenses
@@ -410,11 +411,11 @@ export default function CopilotDashboard({
         let isPast = false;
 
         if (daysLeft === 0) {
-          status = "¡Vence hoy!";
+          status = "Día registrado: hoy";
         } else if (daysLeft > 0) {
-          status = `en ${daysLeft} ${daysLeft === 1 ? "día" : "días"}`;
+          status = `Día registrado: ${day}`;
         } else {
-          status = "Pagado este mes";
+          status = `Día registrado: ${day}`;
           isPast = true;
         }
 
@@ -458,7 +459,7 @@ export default function CopilotDashboard({
     const currentDay = isCurrent ? Math.min(totalDays, Math.max(1, paraguayDay)) : totalDays;
 
     const monthElapsedPercent = Math.round((currentDay / totalDays) * 100);
-    const budgetTotal = totalBudgeted > 0 ? totalBudgeted : 3000000;
+    const budgetTotal = totalBudgeted;
     const budgetSpentPercent = Math.min(100, Math.round((metrics.totalExpenses / budgetTotal) * 100));
 
     // Ideal spending target for today
@@ -537,10 +538,10 @@ export default function CopilotDashboard({
           <div className="w-full text-center">
             <h2 className="text-[clamp(1.45rem,7.7vw,1.875rem)] sm:text-4xl font-extrabold text-slate-900 tracking-tight flex items-baseline justify-center gap-1 sm:gap-2">
               <span>{currencySymbol} {formatMoney(leftToSpend)}</span>
-              <span className="text-lg sm:text-2xl font-bold text-slate-600">restante</span>
+              <span className="text-lg sm:text-2xl font-bold text-slate-600">balance del mes</span>
             </h2>
             <p className="text-xs sm:text-sm font-semibold text-slate-400 mt-1">
-              de {currencySymbol} {formatMoney(totalBudgeted)} presupuestado este mes
+              Ingresos registrados: {currencySymbol} {formatMoney(totalBudgeted)}
             </p>
           </div>
           <button
@@ -1418,7 +1419,7 @@ export default function CopilotDashboard({
 
         <div className="rounded-[28px] bg-white p-5 shadow-[0_4px_24px_rgba(0,0,0,0.04)] border border-slate-100">
           <div className="text-center">
-            <p className="text-[11px] font-bold text-slate-400">Patrimonio Neto Estimado</p>
+            <p className="text-[11px] font-bold text-slate-400">Saldo de cuenta declarado</p>
             <div className="text-3xl font-black text-slate-900 tracking-tight mt-0.5">
               {currencySymbol} {formatMoney(estimatedNetWorth)}
             </div>
@@ -1466,33 +1467,32 @@ export default function CopilotDashboard({
               {/* Mini Credit/Debit Card visual */}
               <div className="relative h-11 w-16 rounded-lg bg-gradient-to-tr from-red-600 via-rose-600 to-rose-500 text-white p-1.5 shadow-md flex flex-col justify-between shrink-0">
                 <span className="text-[7px] font-black tracking-tighter uppercase truncate">
-                  {accountBank}
+                  {accountBank || "TU CUENTA"}
                 </span>
                 <div className="flex items-center justify-between">
                   <div className="h-2 w-3 rounded-sm bg-amber-300/80" />
                   <span className="text-[6px] font-mono tracking-widest">
-                    •• {accountLast4}
+                    •• {privacyMode ? "••••" : accountLast4}
                   </span>
                 </div>
               </div>
               <div>
                 <div className="text-xs font-extrabold text-slate-800">
-                  {accountType}
+                  {accountType || "Agregar cuenta"}
                 </div>
-                <div className="text-[10px] text-slate-400">Disponible</div>
+                <div className="text-[10px] text-slate-400">Saldo declarado</div>
               </div>
             </div>
             <div className="text-right">
               <div className="text-xs sm:text-sm font-black text-slate-900">
-                {currencySymbol} {formatMoney(metrics.netSavings + (accountBaseBalance || 0))}
+                {currencySymbol} {formatMoney(accountBaseBalance || 0)}
               </div>
               <div
                 className={`text-[10px] font-bold ${
                   metrics.savingsRate >= 0 ? "text-emerald-600" : "text-red-600"
                 }`}
               >
-                {metrics.savingsRate >= 0 ? "+" : ""}
-                {metrics.savingsRate.toFixed(1)}% ▲
+                Actualizado por vos
               </div>
             </div>
           </div>
@@ -1503,7 +1503,7 @@ export default function CopilotDashboard({
       <div className="space-y-2">
         <div className="flex items-center justify-between px-1">
           <h3 className="text-xs font-black tracking-wider text-slate-400 uppercase">
-            PRÓXIMOS PAGOS
+            GASTOS RECURRENTES
           </h3>
           <button
             onClick={() => onOpenTransactions("recurring")}
@@ -1687,7 +1687,7 @@ export default function CopilotDashboard({
           <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl text-slate-900">
             <h3 className="text-lg font-black text-slate-900">¿Cómo calculamos tu restante?</h3>
             <p className="text-xs text-slate-500 mt-2 leading-relaxed">
-              Tomamos tus <strong>ingresos presupuestados</strong> del mes ({currencySymbol}{" "}
+              Tomamos tus <strong>ingresos registrados</strong> del mes ({currencySymbol}{" "}
               {formatMoney(totalBudgeted)}) y le restamos tus gastos actuales acumulados (
               {currencySymbol} {formatMoney(metrics.totalExpenses)}).
             </p>
@@ -1707,7 +1707,7 @@ export default function CopilotDashboard({
               <div className="flex justify-between border-t border-slate-200 pt-1 font-black">
                 <span>Disponible restante:</span>
                 <span className="text-emerald-600">
-                  +{currencySymbol} {formatMoney(leftToSpend)}
+                  {currencySymbol} {formatMoney(leftToSpend)}
                 </span>
               </div>
             </div>

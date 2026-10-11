@@ -30,7 +30,9 @@ export async function GET() {
   const headers = ["Fecha", "Tipo", "Categoría", "Monto (Guaraníes)", "Descripción", "Recurrente"];
 
   const escapeCSV = (val: string | number) => {
-    const str = String(val ?? "").replace(/"/g, '""');
+    const raw = String(val ?? "");
+    const safe = /^\s*[=+\-@]/.test(raw) ? `'${raw}` : raw;
+    const str = safe.replace(/"/g, '""');
     return `"${str}"`;
   };
 

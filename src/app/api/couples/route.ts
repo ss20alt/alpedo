@@ -113,20 +113,20 @@ export async function POST(req: Request) {
       const randomCode = `CHULI-${Math.floor(1000 + Math.random() * 9000)}`;
 
       // Archive only this account's previous active goal.
-      await db.execute("UPDATE couples_goals SET status = 'completed' WHERE user_id = ? AND status = 'active'", [user.id]);
-
-      await db.execute(
-        `INSERT INTO couples_goals (title, category, target_amount, current_amount, target_date, invite_code, partner_name, creator_name, status, user_id)
-         VALUES (?, ?, ?, 0, ?, ?, ?, ?, 'active', ?)`,
-        [cleanTitle, cleanCat, numTarget, target_date || null, randomCode, cleanPartner, cleanCreator, user.id]
-      );
-
-      const created = await db.queryOne("SELECT * FROM couples_goals WHERE invite_code = ? AND user_id = ?", [randomCode, user.id]);
+      const created = await db.withTransaction(async () => {
+        await db.execute("UPDATE couples_goals SET status = 'completed' WHERE user_id = ? AND status = 'active'", [user.id]);
+        await db.execute(
+          `INSERT INTO couples_goals (title, category, target_amount, current_amount, target_date, invite_code, partner_name, creator_name, status, user_id)
+           VALUES (?, ?, ?, 0, ?, ?, ?, ?, 'active', ?)`,
+          [cleanTitle, cleanCat, numTarget, target_date || null, randomCode, cleanPartner, cleanCreator, user.id]
+        );
+        return db.queryOne("SELECT * FROM couples_goals WHERE invite_code = ? AND user_id = ?", [randomCode, user.id]);
+      });
       return NextResponse.json(created);
     } else if (action === "contribute") {
       const { goal_id, contributor_name, amount, note } = body;
       const numAmount = Number(amount);
-      if (!goal_id || !Number.isFinite(numAmount) || numAmount <= 0) {
+      if (!goal_id || !Number.isFinite(numAmount) || numAmount <= 0 || numAmount > 1_000_000_000_000) {
         return NextResponse.json({ error: "Datos de aporte inválidos" }, { status: 400 });
       }
 
@@ -141,19 +141,18 @@ export async function POST(req: Request) {
       const cleanContributor = String(contributor_name || "Vos").trim().slice(0, 100);
       const cleanNote = String(note || "Aporte al chanchito").trim().slice(0, 150);
 
-      await db.execute(
-        `INSERT INTO couples_contributions (goal_id, contributor_name, amount, note, date)
-         VALUES (?, ?, ?, ?, CURRENT_DATE)`,
-        [goal_id, cleanContributor, numAmount, cleanNote]
-      );
-
-      // Update goal current amount
-      await db.execute(
-        "UPDATE couples_goals SET current_amount = current_amount + ? WHERE id = ? AND user_id = ?",
-        [numAmount, goal_id, user.id]
-      );
-
-      const updatedGoal = await db.queryOne("SELECT * FROM couples_goals WHERE id = ? AND user_id = ?", [goal_id, user.id]);
+      const updatedGoal = await db.withTransaction(async () => {
+        await db.execute(
+          `INSERT INTO couples_contributions (goal_id, contributor_name, amount, note, date)
+           VALUES (?, ?, ?, ?, ?)`,
+          [goal_id, cleanContributor, numAmount, cleanNote, getParaguayDateString()]
+        );
+        await db.execute(
+          "UPDATE couples_goals SET current_amount = current_amount + ? WHERE id = ? AND user_id = ?",
+          [numAmount, goal_id, user.id]
+        );
+        return db.queryOne("SELECT * FROM couples_goals WHERE id = ? AND user_id = ?", [goal_id, user.id]);
+      });
       return NextResponse.json({ success: true, goal: updatedGoal });
     }
 
@@ -186,8 +185,10 @@ export async function DELETE(req: Request) {
     }
 
     // Delete associated contributions only after confirming the goal belongs to this account.
-    await db.execute("DELETE FROM couples_contributions WHERE goal_id = ?", [id]);
-    await db.execute("DELETE FROM couples_goals WHERE id = ? AND user_id = ?", [id, user.id]);
+    await db.withTransaction(async () => {
+      await db.execute("DELETE FROM couples_contributions WHERE goal_id = ?", [id]);
+      await db.execute("DELETE FROM couples_goals WHERE id = ? AND user_id = ?", [id, user.id]);
+    });
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("Error deleting couple goal:", err);

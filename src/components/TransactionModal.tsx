@@ -14,6 +14,7 @@ import { Transaction } from "@/lib/finance-engine";
 import { triggerHaptic } from "@/lib/haptics";
 import FinanceIcon from "@/components/FinanceIcon";
 import { getParaguayDateString } from "@/lib/date-utils";
+import { trapDialogTab } from "@/lib/dialog-keyboard";
 
 export interface TransactionPreset {
   description: string;
@@ -23,6 +24,7 @@ export interface TransactionPreset {
 }
 
 interface TransactionModalProps {
+  userId: number;
   isOpen: boolean;
   onClose: () => void;
   onSaved: () => void;
@@ -32,6 +34,7 @@ interface TransactionModalProps {
 }
 
 export default function TransactionModal({
+  userId,
   isOpen,
   onClose,
   onSaved,
@@ -47,6 +50,10 @@ export default function TransactionModal({
   const [isRecurring, setIsRecurring] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [draftNotice, setDraftNotice] = useState<string | null>(null);
+  const [isOnline, setIsOnline] = useState(true);
+  const draftReady = useRef(false);
+  const draftKey = `alpedo_transaction_draft_${userId}`;
 
   // Native Drag-to-Dismiss state
   const [dragOffsetY, setDragOffsetY] = useState(0);
@@ -54,8 +61,10 @@ export default function TransactionModal({
   const touchStartY = useRef<number | null>(null);
 
   useEffect(() => {
+    draftReady.current = false;
     const timer = window.setTimeout(() => {
       if (editingTransaction) {
+        setDraftNotice(null);
         setType(editingTransaction.type);
         setCategory(editingTransaction.category);
         setAmount(editingTransaction.amount.toString());
@@ -63,6 +72,7 @@ export default function TransactionModal({
         setDate(editingTransaction.date);
         setIsRecurring(Boolean(editingTransaction.is_recurring));
       } else if (initialPreset) {
+        setDraftNotice(null);
         setType("expense");
         setCategory(initialPreset.category);
         setAmount(initialPreset.amount > 0 ? initialPreset.amount.toString() : "");
@@ -76,12 +86,42 @@ export default function TransactionModal({
         setDescription("");
         setDate(getParaguayDateString());
         setIsRecurring(false);
+        try {
+          const saved = JSON.parse(localStorage.getItem(draftKey) || "null");
+          if (saved && typeof saved === "object") {
+            if (saved.type === "income" || saved.type === "expense") setType(saved.type);
+            if (["fijo", "variable", "pasivo", "al_pedo"].includes(saved.category)) setCategory(saved.category);
+            if (typeof saved.amount === "string") setAmount(saved.amount);
+            if (typeof saved.description === "string") setDescription(saved.description);
+            if (typeof saved.date === "string") setDate(saved.date);
+            setIsRecurring(Boolean(saved.isRecurring));
+            setDraftNotice("Borrador recuperado de este dispositivo.");
+          } else setDraftNotice(null);
+        } catch { setDraftNotice(null); }
       }
       setError(null);
       setDragOffsetY(0);
+      draftReady.current = true;
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [editingTransaction, initialPreset, isOpen]);
+  }, [editingTransaction, initialPreset, isOpen, draftKey]);
+
+  useEffect(() => {
+    if (!isOpen || editingTransaction || !draftReady.current) return;
+    try {
+      if (!amount && !description) localStorage.removeItem(draftKey);
+      else localStorage.setItem(draftKey, JSON.stringify({ type, category, amount, description, date, isRecurring }));
+    } catch { /* El navegador puede impedir el almacenamiento local. */ }
+  }, [isOpen, editingTransaction, draftKey, type, category, amount, description, date, isRecurring]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const update = () => setIsOnline(navigator.onLine);
+    update();
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => { window.removeEventListener("online", update); window.removeEventListener("offline", update); };
+  }, [isOpen]);
 
   const handleTypeChange = (newType: "income" | "expense") => {
     triggerHaptic("selection");
@@ -199,6 +239,16 @@ export default function TransactionModal({
       return;
     }
 
+    if (!isOnline && !editingTransaction) {
+      try {
+        localStorage.setItem(draftKey, JSON.stringify({ type, category, amount, description: description.trim(), date, isRecurring }));
+        onClose();
+      } catch {
+        setError("No se pudo guardar el borrador en este dispositivo.");
+      }
+      return;
+    }
+
     setLoading(true);
     try {
       const url = "/api/transactions";
@@ -225,19 +275,27 @@ export default function TransactionModal({
         setError(err.error || "Error al guardar");
       } else {
         triggerHaptic("success");
+        if (!editingTransaction) localStorage.removeItem(draftKey);
         onSaved();
         onClose();
       }
     } catch {
       triggerHaptic("warning");
-      setError("Error de red con el servidor");
+      setError(editingTransaction ? "Sin conexión. No se pudo actualizar el movimiento." : "Sin conexión. El borrador queda guardado en este dispositivo; envialo cuando vuelvas a estar en línea.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/40 backdrop-blur-sm p-0 sm:p-4 overflow-hidden select-none">
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/40 backdrop-blur-sm p-0 sm:p-4 overflow-hidden select-none"
+      role="dialog" aria-modal="true" aria-label={editingTransaction ? "Editar movimiento" : "Nuevo movimiento"}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") onClose();
+        trapDialogTab(event);
+      }}
+    >
       <div
         className="mobile-sheet-viewport-94 w-full max-w-lg rounded-t-[32px] sm:rounded-[32px] border-t sm:border border-slate-100 bg-white p-4 sm:p-6 shadow-2xl flex flex-col text-slate-900 animate-in fade-in slide-in-from-bottom-6 duration-200"
         style={{
@@ -283,6 +341,8 @@ export default function TransactionModal({
             {error}
           </div>
         )}
+        {!isOnline && !editingTransaction && <p role="status" className="mt-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-900">Sin conexión. Podés guardar un borrador en este dispositivo y enviarlo cuando vuelvas a estar en línea.</p>}
+        {draftNotice && !error && <p role="status" className="mt-2 text-xs font-semibold text-blue-700">{draftNotice}</p>}
 
         {/* Scrollable Form Body */}
         <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0 mt-2">
@@ -614,7 +674,7 @@ export default function TransactionModal({
               className="flex-[2] h-12 flex items-center justify-center gap-2 rounded-xl bg-[#1656DB] text-sm font-black text-white hover:bg-blue-700 disabled:opacity-50 transition shadow-md shadow-blue-500/20 active:scale-[0.98]"
             >
               <Check className="h-4 w-4 stroke-[2.5]" />
-              <span>{loading ? "Guardando..." : editingTransaction ? "Actualizar" : "Guardar Movimiento"}</span>
+              <span>{loading ? "Guardando..." : editingTransaction ? "Actualizar" : isOnline ? "Guardar Movimiento" : "Guardar borrador"}</span>
             </button>
           </div>
         </form>

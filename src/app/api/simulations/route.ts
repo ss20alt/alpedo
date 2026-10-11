@@ -63,10 +63,11 @@ export async function POST(req: Request) {
     if (!Number.isFinite(numMonthly) || numMonthly <= 0 || numMonthly > MAX_AMOUNT) {
       return NextResponse.json({ error: "Ingresá una cuota mensual válida" }, { status: 400 });
     }
-    if (!Number.isFinite(numRate) || numRate < 0 || numRate > 9999.99) {
+    if (!Number.isFinite(numRate) || numRate < 0 || numRate > 200) {
       return NextResponse.json({ error: "Ingresá una tasa válida" }, { status: 400 });
     }
-    if (!Number.isFinite(numTotal) || numTotal <= 0 || numTotal > MAX_AMOUNT) {
+    if (!Number.isFinite(numTotal) || numTotal < numAmount || numTotal > MAX_AMOUNT ||
+        Math.abs(numTotal - numMonthly * numInst) > 1) {
       return NextResponse.json({ error: "El total a devolver excede el rango permitido" }, { status: 400 });
     }
     if (cleanNotes.length > 2000) {

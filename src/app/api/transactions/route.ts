@@ -8,6 +8,22 @@ import type { DbParameter } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
+function validDate(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
+function validAmount(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 && value <= 1_000_000_000_000;
+}
+
+function validCategory(type: unknown, category: unknown): boolean {
+  return type === "income"
+    ? ["fijo", "variable", "pasivo"].includes(String(category))
+    : type === "expense" && ["fijo", "variable", "al_pedo"].includes(String(category));
+}
+
 export async function GET(req: Request) {
   const user = await getCurrentUser();
   if (!user) {
@@ -22,8 +38,12 @@ export async function GET(req: Request) {
     const params: DbParameter[] = [user.id, user.id];
 
     if (month && month !== "all") {
-      queryStr += " AND date::text LIKE ?";
-      params.push(`${month}%`);
+      if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+        return NextResponse.json({ error: "Mes inválido" }, { status: 400 });
+      }
+      const [year, monthNumber] = month.split("-").map(Number);
+      queryStr += " AND date >= ? AND date < ?";
+      params.push(`${month}-01`, new Date(Date.UTC(year, monthNumber, 1)).toISOString().slice(0, 10));
     }
 
     queryStr += " ORDER BY date DESC, created_at DESC";
@@ -59,15 +79,19 @@ export async function GET(req: Request) {
         SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as total_income,
         SUM(CASE WHEN type = 'expense' AND category = 'al_pedo' THEN amount ELSE 0 END) as al_pedo_expenses
        FROM transactions
-       WHERE to_char(date, 'YYYY-MM') >= ? AND to_char(date, 'YYYY-MM') < ?
+       WHERE date >= ? AND date < ?
          AND (user_id = ? OR (user_id IS NULL AND ? = 1))
        GROUP BY to_char(date, 'YYYY-MM')
        ORDER BY month ASC`,
-      [historyStart, historyEndExclusive, user.id, user.id]
+      [`${historyStart}-01`, `${historyEndExclusive}-01`, user.id, user.id]
     );
 
     const recurringExpenses = await db.query<Transaction>(
-      "SELECT * FROM transactions WHERE is_recurring = true AND type = 'expense' AND (user_id = ? OR (user_id IS NULL AND ? = 1)) ORDER BY date ASC",
+      `SELECT DISTINCT ON (LOWER(TRIM(description))) *
+       FROM transactions
+       WHERE is_recurring = true AND type = 'expense'
+         AND (user_id = ? OR (user_id IS NULL AND ? = 1))
+       ORDER BY LOWER(TRIM(description)), date DESC, created_at DESC`,
       [user.id, user.id]
     );
 
@@ -112,8 +136,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: `Categoría inválida para ${type}` }, { status: 400 });
     }
 
-    const numAmount = parseFloat(amount);
-    if (isNaN(numAmount) || numAmount <= 0 || !isFinite(numAmount) || numAmount > 1000000000000) {
+    const numAmount = Number(amount);
+    if (!validAmount(numAmount)) {
       return NextResponse.json({ error: "El monto debe ser un número válido mayor a 0" }, { status: 400 });
     }
 
@@ -122,8 +146,10 @@ export async function POST(req: Request) {
     }
     const cleanDesc = description.trim().slice(0, 150);
 
-    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-    const txDate = date && dateRegex.test(date) ? date : getParaguayDateString();
+    if (date !== undefined && !validDate(date)) {
+      return NextResponse.json({ error: "Fecha inválida" }, { status: 400 });
+    }
+    const txDate = date || getParaguayDateString();
     const id = crypto.randomUUID();
 
     await db.execute(
@@ -132,7 +158,7 @@ export async function POST(req: Request) {
       [id, type, category, numAmount, cleanDesc, txDate, Boolean(is_recurring), user.id]
     );
 
-    const created = await db.queryOne("SELECT * FROM transactions WHERE id = ?", [id]);
+    const created = await db.queryOne("SELECT * FROM transactions WHERE id = ? AND user_id = ?", [id, user.id]);
     return NextResponse.json(created);
   } catch (err) {
     console.error("Error creating transaction:", err);
@@ -150,12 +176,16 @@ export async function PUT(req: Request) {
     const body = await req.json();
     const { id, type, category, amount, description, date, is_recurring } = body;
 
-    if (!id) {
+    if (typeof id !== "string" || !id) {
       return NextResponse.json({ error: "ID de movimiento requerido" }, { status: 400 });
     }
 
-    const numAmount = parseFloat(amount);
-    if (isNaN(numAmount) || numAmount <= 0 || !isFinite(numAmount) || numAmount > 1000000000000) {
+    if (!validCategory(type, category)) {
+      return NextResponse.json({ error: "Tipo o categoría inválidos" }, { status: 400 });
+    }
+
+    const numAmount = Number(amount);
+    if (!validAmount(numAmount)) {
       return NextResponse.json({ error: "Monto inválido" }, { status: 400 });
     }
 
@@ -164,17 +194,23 @@ export async function PUT(req: Request) {
     }
     const cleanDesc = description.trim().slice(0, 150);
 
-    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-    const txDate = date && dateRegex.test(date) ? date : getParaguayDateString();
+    if (date !== undefined && !validDate(date)) {
+      return NextResponse.json({ error: "Fecha inválida" }, { status: 400 });
+    }
+    const txDate = date || getParaguayDateString();
 
-    await db.execute(
+    const affected = await db.execute(
       `UPDATE transactions
        SET type = ?, category = ?, amount = ?, description = ?, date = ?, is_recurring = ?
        WHERE id = ? AND (user_id = ? OR (user_id IS NULL AND ? = 1))`,
       [type, category, numAmount, cleanDesc, txDate, Boolean(is_recurring), id, user.id, user.id]
     );
 
-    const updated = await db.queryOne("SELECT * FROM transactions WHERE id = ?", [id]);
+    if (affected === 0) return NextResponse.json({ error: "Movimiento no encontrado" }, { status: 404 });
+    const updated = await db.queryOne(
+      "SELECT * FROM transactions WHERE id = ? AND (user_id = ? OR (user_id IS NULL AND ? = 1))",
+      [id, user.id, user.id]
+    );
     return NextResponse.json(updated);
   } catch (err) {
     console.error("Error updating transaction:", err);

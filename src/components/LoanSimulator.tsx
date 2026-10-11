@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { FinancialMetrics, simulateLoanImpact, LoanSimulationImpact } from "@/lib/finance-engine";
 import { Calculator, ShieldAlert, CheckCircle2, AlertTriangle, Flame, BookmarkPlus, Trash2, Info, ChevronDown } from "lucide-react";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
 const MAX_LOAN_AMOUNT = 9_999_999_999_999;
 const MAX_INSTALLMENTS = 120;
@@ -37,6 +38,7 @@ export default function LoanSimulator({ metrics, currencySymbol }: LoanSimulator
   const [loadingSaved, setLoadingSaved] = useState(true);
   const [savedLoadError, setSavedLoadError] = useState(false);
   const [saveFeedback, setSaveFeedback] = useState("");
+  const [simulationToDelete, setSimulationToDelete] = useState<{ id: string; title: string } | null>(null);
 
   const loanAmount = Number(loanAmountInput);
   const installmentsValue = Number(installmentsInput);
@@ -88,7 +90,8 @@ export default function LoanSimulator({ metrics, currencySymbol }: LoanSimulator
       ? Number.isFinite(monthlyPaymentValue) && monthlyPaymentValue > 0 && monthlyPaymentValue <= MAX_LOAN_AMOUNT
       : interestRateInput.trim() !== "" && Number.isFinite(interestRateValue) && interestRateValue >= 0 && interestRateValue <= MAX_ANNUAL_RATE) &&
     Number.isFinite(effectiveMonthlyPayment) && effectiveMonthlyPayment > 0 &&
-    Number.isFinite(totalPaymentEstimate) && totalPaymentEstimate <= MAX_LOAN_AMOUNT;
+    Number.isFinite(totalPaymentEstimate) && totalPaymentEstimate <= MAX_LOAN_AMOUNT &&
+    totalPaymentEstimate >= loanAmount;
 
   const validationMessage =
     !Number.isFinite(loanAmount) || loanAmount <= 0 || loanAmount > MAX_LOAN_AMOUNT
@@ -101,6 +104,8 @@ export default function LoanSimulator({ metrics, currencySymbol }: LoanSimulator
       : calculationMode === "interest_rate" &&
         (interestRateInput.trim() === "" || !Number.isFinite(interestRateValue) || interestRateValue < 0 || interestRateValue > MAX_ANNUAL_RATE)
       ? "La tasa anual debe estar entre 0% y 200%."
+      : totalPaymentEstimate < loanAmount
+      ? "El total de las cuotas no puede ser menor al monto solicitado."
       : "El total estimado supera el rango que puede calcularse.";
 
   // Keep a finite fallback while the user is editing an incomplete field.
@@ -147,8 +152,8 @@ export default function LoanSimulator({ metrics, currencySymbol }: LoanSimulator
     }
   };
 
-  const handleDeleteSaved = async (id: string, title: string) => {
-    if (!window.confirm(`¿Eliminar la simulación “${title}”?`)) return;
+  const handleDeleteSaved = async (id: string) => {
+    setSimulationToDelete(null);
     try {
       const res = await fetch(`/api/simulations?id=${id}`, { method: "DELETE" });
       if (res.ok) {
@@ -585,7 +590,7 @@ export default function LoanSimulator({ metrics, currencySymbol }: LoanSimulator
                     <button
                       type="button"
                       aria-label={`Eliminar simulación ${sim.title}`}
-                      onClick={() => handleDeleteSaved(sim.id, sim.title)}
+                      onClick={() => setSimulationToDelete({ id: sim.id, title: sim.title })}
                       className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-slate-500 hover:bg-rose-50 hover:text-rose-600 transition"
                       title="Eliminar"
                     >
@@ -642,6 +647,7 @@ export default function LoanSimulator({ metrics, currencySymbol }: LoanSimulator
           No se pudieron cargar tus simulaciones. Tocá para reintentar.
         </button>
       )}
+      {simulationToDelete && <ConfirmDialog title="¿Eliminar simulación?" description={`Se eliminará “${simulationToDelete.title}” de tus simulaciones guardadas.`} confirmLabel="Eliminar" destructive onCancel={() => setSimulationToDelete(null)} onConfirm={() => void handleDeleteSaved(simulationToDelete.id)} />}
     </div>
   );
 }

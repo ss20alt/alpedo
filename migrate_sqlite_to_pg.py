@@ -3,7 +3,7 @@ import psycopg2
 import os
 
 sqlite_path = "/home/ubuntu/finanzas-inteligentes/data/finanzas.db"
-pg_conn_str = "postgresql://alpedo_user:AlPedoPy2026_SecPass!@127.0.0.1:5432/alpedo_db"
+pg_conn_str = os.environ["DATABASE_URL"]
 
 if not os.path.exists(sqlite_path):
     print("SQLite DB not found at", sqlite_path)

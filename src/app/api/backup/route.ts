@@ -15,12 +15,9 @@ export async function GET() {
       [user.id, user.id]
     );
     const simulations = await db.query("SELECT * FROM loan_simulations WHERE user_id = ?", [user.id]);
-    const settings = await db.query(
-      `SELECT key, value FROM settings
-       WHERE key != 'pin_hash'
-         AND key !~ '^my_friend_code(_[0-9]+)?$'
-         AND key !~ '^streak_tracking_start_[0-9]+$'`
-    );
+    const settings = user.id === 1
+      ? await db.query("SELECT key, value FROM settings WHERE key IN ('app_name')")
+      : [];
     const savingsChallenge = await db.query("SELECT * FROM savings_challenge WHERE user_id = ?", [user.id]);
     const couplesGoals = await db.query(
       "SELECT * FROM couples_goals WHERE user_id = ? OR (user_id IS NULL AND ? = 1)",
@@ -50,6 +47,7 @@ export async function GET() {
       headers: {
         "Content-Type": "application/json",
         "Content-Disposition": `attachment; filename=alpedo_backup_${getParaguayDateString()}.json`,
+        "Cache-Control": "no-store",
       },
     });
   } catch (err) {
@@ -65,30 +63,73 @@ export async function POST(req: Request) {
   }
 
   try {
-    const data = await req.json();
-    if (!data.transactions || !Array.isArray(data.transactions)) {
+    const contentLength = Number(req.headers.get("content-length") || 0);
+    if (contentLength > 2_000_000) {
+      return NextResponse.json({ error: "El respaldo supera 2 MB" }, { status: 413 });
+    }
+    const raw = await req.text();
+    if (raw.length > 2_000_000) {
+      return NextResponse.json({ error: "El respaldo supera 2 MB" }, { status: 413 });
+    }
+    let data: Record<string, unknown>;
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("invalid");
+      data = parsed as Record<string, unknown>;
+    } catch {
+      return NextResponse.json({ error: "El respaldo no es JSON válido" }, { status: 400 });
+    }
+    if (!data || !Array.isArray(data.transactions) || data.transactions.length > 5000) {
       return NextResponse.json({ error: "Formato de respaldo inválido" }, { status: 400 });
     }
+    const backupTransactions = data.transactions as Array<{
+      id: string; type: string; category: string; amount: number | string;
+      description: string; date: string; is_recurring?: boolean; created_at?: string;
+    }>;
+    const allowedSizes: Record<string, number> = {
+      savings_challenge: 1, couples_goals: 200, couples_contributions: 5000,
+      friend_streaks: 500, simulations: 500,
+    };
+    for (const [key, max] of Object.entries(allowedSizes)) {
+      const rows = data[key];
+      if (rows !== undefined && (!Array.isArray(rows) || rows.length > max)) {
+        return NextResponse.json({ error: `Sección inválida: ${key}` }, { status: 400 });
+      }
+    }
 
+    for (const t of backupTransactions) {
+      if (
+        !t || typeof t.id !== "string" || t.id.length > 100 ||
+        !["income", "expense"].includes(t.type) ||
+        !(t.type === "income" ? ["fijo", "variable", "pasivo"] : ["fijo", "variable", "al_pedo"]).includes(t.category) ||
+        !Number.isFinite(Number(t.amount)) || Number(t.amount) <= 0 ||
+        typeof t.description !== "string" || !t.description.trim() ||
+        typeof t.date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(t.date)
+      ) {
+        return NextResponse.json({ error: "El respaldo contiene movimientos inválidos" }, { status: 400 });
+      }
+    }
+
+    return await db.withTransaction(async () => {
     // 1. Restore Transactions
-    for (const t of data.transactions) {
+    for (const t of backupTransactions) {
       await db.execute(
         `INSERT INTO transactions (id, user_id, type, category, amount, description, date, is_recurring, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT (id) DO UPDATE SET
-           user_id = EXCLUDED.user_id,
            type = EXCLUDED.type,
            category = EXCLUDED.category,
            amount = EXCLUDED.amount,
            description = EXCLUDED.description,
            date = EXCLUDED.date,
-           is_recurring = EXCLUDED.is_recurring`,
+           is_recurring = EXCLUDED.is_recurring
+         WHERE transactions.user_id = EXCLUDED.user_id`,
         [
           t.id,
           user.id,
           t.type,
           t.category,
-          parseFloat(t.amount),
+          Number(t.amount),
           t.description,
           t.date,
           Boolean(t.is_recurring),
@@ -206,8 +247,9 @@ export async function POST(req: Request) {
           !Number.isFinite(amount) || amount <= 0 || amount > 9_999_999_999_999 ||
           !Number.isInteger(installments) || installments < 1 || installments > 120 ||
           !Number.isFinite(monthlyPayment) || monthlyPayment <= 0 || monthlyPayment > 9_999_999_999_999 ||
-          !Number.isFinite(interestRate) || interestRate < 0 || interestRate > 9999.99 ||
-          !Number.isFinite(totalPayment) || totalPayment <= 0 || totalPayment > 9_999_999_999_999
+          !Number.isFinite(interestRate) || interestRate < 0 || interestRate > 200 ||
+          !Number.isFinite(totalPayment) || totalPayment < amount || totalPayment > 9_999_999_999_999 ||
+          Math.abs(totalPayment - monthlyPayment * installments) > 1
         ) continue;
         await db.execute(
           `INSERT INTO loan_simulations (id, user_id, title, amount, installments, monthly_payment, interest_rate, total_payment, notes, created_at)
@@ -237,7 +279,8 @@ export async function POST(req: Request) {
       }
     }
 
-    return NextResponse.json({ success: true, count: data.transactions.length });
+    return NextResponse.json({ success: true, count: backupTransactions.length });
+    });
   } catch (err) {
     console.error("Backup import error:", err);
     return NextResponse.json({ error: "Error al restaurar respaldo" }, { status: 500 });

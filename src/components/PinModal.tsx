@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Lock,
   KeyRound,
@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { triggerHaptic } from "@/lib/haptics";
 import FinanceIcon from "@/components/FinanceIcon";
+import { trapDialogTab } from "@/lib/dialog-keyboard";
 
 interface PinModalProps {
   isConfigured: boolean;
@@ -22,8 +23,8 @@ interface PinModalProps {
 }
 
 export default function PinModal({ isConfigured, onAuthenticated }: PinModalProps) {
-  const [mode, setMode] = useState<"login" | "register">("login");
-  const [useEmailLogin, setUseEmailLogin] = useState(false);
+  const [mode, setMode] = useState<"login" | "register" | "recovery">(isConfigured ? "login" : "register");
+  const [useEmailLogin] = useState(true);
 
   // Login states
   const [loginEmail, setLoginEmail] = useState("");
@@ -37,7 +38,15 @@ export default function PinModal({ isConfigured, onAuthenticated }: PinModalProp
 
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [recoveryCode, setRecoveryCode] = useState("");
+  const [recoveryNewPin, setRecoveryNewPin] = useState("");
+  const [notice, setNotice] = useState<string | null>(null);
   const [shake, setShake] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setLoginEmail(localStorage.getItem("alpedo_last_email") || ""), 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   const triggerShake = () => {
     setShake(true);
@@ -54,9 +63,7 @@ export default function PinModal({ isConfigured, onAuthenticated }: PinModalProp
         action: "login",
         pin: pinToTest,
       };
-      if (emailToTest && emailToTest.trim().length > 0) {
-        payload.email = emailToTest.trim();
-      }
+      payload.email = (emailToTest || loginEmail).trim();
 
       const res = await fetch("/api/auth", {
         method: "POST",
@@ -70,6 +77,7 @@ export default function PinModal({ isConfigured, onAuthenticated }: PinModalProp
         triggerShake();
         setPin("");
       } else {
+        localStorage.setItem("alpedo_last_email", payload.email);
         triggerHaptic("success");
         onAuthenticated();
       }
@@ -87,6 +95,10 @@ export default function PinModal({ isConfigured, onAuthenticated }: PinModalProp
     if (pin.length < 4) {
       setError("El PIN debe tener al menos 4 números");
       triggerShake();
+      return;
+    }
+    if (!loginEmail.trim()) {
+      setError("Ingresá el correo de tu cuenta");
       return;
     }
     await verifyAndSubmit(pin, useEmailLogin ? loginEmail : undefined);
@@ -107,8 +119,8 @@ export default function PinModal({ isConfigured, onAuthenticated }: PinModalProp
       triggerShake();
       return;
     }
-    if (regPin.length < 4) {
-      setError("El PIN debe tener al menos 4 números");
+    if (!/^\d{6,12}$/.test(regPin)) {
+      setError("Elegí un PIN de 6 a 12 números");
       triggerShake();
       return;
     }
@@ -137,6 +149,7 @@ export default function PinModal({ isConfigured, onAuthenticated }: PinModalProp
         triggerShake();
       } else {
         triggerHaptic("success");
+        localStorage.setItem("alpedo_last_email", regEmail.trim());
         // Reset tour state so the new tester gets the interactive guided tour
         if (typeof window !== "undefined") {
           localStorage.removeItem("alpedo_tour_completed");
@@ -159,12 +172,6 @@ export default function PinModal({ isConfigured, onAuthenticated }: PinModalProp
       setPin(next);
       setError(null);
 
-      // Instant native auto-submit on 4th digit if in direct PIN mode
-      if (!useEmailLogin && next.length === 4) {
-        setTimeout(() => {
-          verifyAndSubmit(next);
-        }, 120);
-      }
     }
   };
 
@@ -174,17 +181,38 @@ export default function PinModal({ isConfigured, onAuthenticated }: PinModalProp
     setError(null);
   };
 
-  // Quick Demo Login Shortcut
-  const handleDemoLogin = () => {
-    triggerHaptic("selection");
-    setPin("1234");
-    setTimeout(() => {
-      verifyAndSubmit("1234");
-    }, 100);
+  const handleRecoverySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (!loginEmail.trim() || !recoveryCode.trim() || !/^\d{6,12}$/.test(recoveryNewPin)) {
+      setError("Ingresá correo, código de respaldo y un PIN nuevo de 6 a 12 números.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch("/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "reset_pin", email: loginEmail.trim(), recoveryCode: recoveryCode.trim(), newPin: recoveryNewPin }),
+      });
+      const data = await res.json();
+      if (!res.ok) setError(data.error || "No se pudo recuperar la cuenta");
+      else {
+        setRecoveryCode("");
+        setRecoveryNewPin("");
+        setNotice("PIN actualizado. Iniciá sesión con el nuevo PIN.");
+        setMode("login");
+      }
+    } catch {
+      setError("Sin conexión. Intentá de nuevo.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4 select-none overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4 select-none overflow-y-auto"
+      role="dialog" aria-modal="true" aria-label="Acceso a alpedo" onKeyDown={trapDialogTab}>
       <div
         className={`w-full max-w-sm rounded-[32px] border border-slate-100 bg-white p-6 sm:p-7 shadow-2xl text-slate-900 animate-in fade-in zoom-in-95 duration-200 my-auto ${
           shake ? "animate-shake" : ""
@@ -214,7 +242,7 @@ export default function PinModal({ isConfigured, onAuthenticated }: PinModalProp
               setError(null);
             }}
             className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-black transition active:scale-95 ${
-              mode === "login"
+              mode === "login" || mode === "recovery"
                 ? "bg-white text-slate-900 shadow-sm"
                 : "text-slate-500 hover:text-slate-900"
             }`}
@@ -248,6 +276,7 @@ export default function PinModal({ isConfigured, onAuthenticated }: PinModalProp
             <span className="leading-tight">{error}</span>
           </div>
         )}
+        {notice && <p role="status" className="mt-3 rounded-xl bg-emerald-50 p-3 text-xs font-bold text-emerald-800">{notice}</p>}
 
         {/* ================= MODE 1: LOGIN ================= */}
         {mode === "login" && (
@@ -255,7 +284,7 @@ export default function PinModal({ isConfigured, onAuthenticated }: PinModalProp
             {/* Optional Email input */}
             {useEmailLogin && (
               <div className="animate-in fade-in duration-200">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">
+                <label className="block text-xs font-bold text-slate-600 mb-1">
                   Correo Electrónico
                 </label>
                 <div className="relative">
@@ -264,7 +293,7 @@ export default function PinModal({ isConfigured, onAuthenticated }: PinModalProp
                     value={loginEmail}
                     onChange={(e) => setLoginEmail(e.target.value)}
                     placeholder="tu-correo@ejemplo.com"
-                    className="w-full text-xs font-semibold rounded-xl border border-slate-200 bg-slate-50/70 pl-8 pr-3 py-2.5 text-slate-900 placeholder:text-slate-300 focus:bg-white focus:border-[#1656DB] focus:outline-none transition"
+                    className="w-full text-base font-semibold rounded-xl border border-slate-200 bg-slate-50/70 pl-8 pr-3 py-2.5 text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-[#1656DB] focus:outline-none transition"
                   />
                   <Mail className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
                 </div>
@@ -274,20 +303,9 @@ export default function PinModal({ isConfigured, onAuthenticated }: PinModalProp
             {/* PIN Input Display */}
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                  PIN de Acceso (4 dígitos)
+                <label className="text-xs font-bold text-slate-600">
+                  PIN de acceso
                 </label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    triggerHaptic("light");
-                    setUseEmailLogin(!useEmailLogin);
-                    setError(null);
-                  }}
-                  className="text-[10px] font-bold text-[#1656DB] hover:underline"
-                >
-                  {useEmailLogin ? "Entrar solo con PIN" : "Entrar con correo"}
-                </button>
               </div>
 
               <div className="relative">
@@ -305,7 +323,7 @@ export default function PinModal({ isConfigured, onAuthenticated }: PinModalProp
             </div>
 
             {/* Quick Touch Keypad */}
-            {!useEmailLogin && (
+            {(
               <div className="grid grid-cols-3 gap-1.5 pt-1">
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
                   <button
@@ -360,18 +378,19 @@ export default function PinModal({ isConfigured, onAuthenticated }: PinModalProp
               )}
             </button>
 
-            {/* Quick Demo Test Access Button */}
-            <div className="pt-1 text-center">
-              <button
-                type="button"
-                onClick={handleDemoLogin}
-                className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50/80 px-3 py-1 text-[11px] font-black text-[#1656DB] hover:bg-blue-100 active:scale-95 transition"
-              >
-                <span className="inline-flex items-center gap-1.5"><FinanceIcon name="zap" className="h-3.5 w-3.5" /> Entrar como demo (PIN 1234)</span>
-              </button>
-            </div>
+            <button type="button" onClick={() => { setMode("recovery"); setError(null); setNotice(null); }} className="w-full min-h-11 text-xs font-bold text-[#1656DB]">Olvidé mi PIN</button>
+
           </form>
         )}
+
+        {mode === "recovery" && <form onSubmit={handleRecoverySubmit} className="mt-4 space-y-3">
+          <p className="text-xs leading-relaxed text-slate-600">Usá el código de respaldo que guardaste desde Ajustes. Si nunca generaste uno, no podrás restablecer el PIN desde esta pantalla.</p>
+          <label className="block text-xs font-bold text-slate-600">Correo de la cuenta<input type="email" required value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} className="mt-1 h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-base text-slate-900" /></label>
+          <label className="block text-xs font-bold text-slate-600">Código de respaldo<input type="text" required autoComplete="off" value={recoveryCode} onChange={(e) => setRecoveryCode(e.target.value)} className="mt-1 h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-base text-slate-900" /></label>
+          <label className="block text-xs font-bold text-slate-600">Nuevo PIN (6 a 12 números)<input type="password" inputMode="numeric" required minLength={6} maxLength={12} value={recoveryNewPin} onChange={(e) => setRecoveryNewPin(e.target.value)} className="mt-1 h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-base text-slate-900" /></label>
+          <button type="submit" disabled={loading} className="h-11 w-full rounded-xl bg-[#1656DB] text-xs font-black text-white disabled:opacity-50">{loading ? "Verificando…" : "Actualizar PIN"}</button>
+          <button type="button" onClick={() => { setMode("login"); setError(null); }} className="h-11 w-full text-xs font-bold text-slate-600">Volver a iniciar sesión</button>
+        </form>}
 
         {/* ================= MODE 2: REGISTER ================= */}
         {mode === "register" && (
@@ -421,7 +440,7 @@ export default function PinModal({ isConfigured, onAuthenticated }: PinModalProp
                   value={regPin}
                   onChange={(e) => setRegPin(e.target.value)}
                   placeholder="••••"
-                  maxLength={6}
+                  maxLength={12}
                   required
                   className="w-full text-center tracking-widest text-lg font-mono rounded-xl border border-slate-200 bg-slate-50/70 px-2 py-2 text-slate-900 placeholder:text-slate-300 focus:bg-white focus:border-[#1656DB] focus:outline-none transition"
                 />
@@ -437,7 +456,7 @@ export default function PinModal({ isConfigured, onAuthenticated }: PinModalProp
                   value={regConfirmPin}
                   onChange={(e) => setRegConfirmPin(e.target.value)}
                   placeholder="••••"
-                  maxLength={6}
+                  maxLength={12}
                   required
                   className="w-full text-center tracking-widest text-lg font-mono rounded-xl border border-slate-200 bg-slate-50/70 px-2 py-2 text-slate-900 placeholder:text-slate-300 focus:bg-white focus:border-[#1656DB] focus:outline-none transition"
                 />
@@ -451,7 +470,7 @@ export default function PinModal({ isConfigured, onAuthenticated }: PinModalProp
 
             <button
               type="submit"
-              disabled={loading || regPin.length < 4 || regName.length < 2 || !regEmail.includes("@")}
+              disabled={loading || regPin.length < 6 || regName.length < 2 || !regEmail.includes("@")}
               className="w-full h-11 rounded-2xl bg-[#1656DB] text-xs font-black text-white hover:bg-blue-600 active:scale-[0.98] disabled:opacity-50 transition shadow-md shadow-blue-600/25 flex items-center justify-center gap-1.5 mt-2"
             >
               {loading ? (

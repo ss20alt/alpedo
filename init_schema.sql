@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS transactions (
 CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions (date DESC);
 CREATE INDEX IF NOT EXISTS idx_transactions_type_date ON transactions (type, date DESC);
 CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions (category);
+CREATE INDEX IF NOT EXISTS idx_transactions_user_date ON transactions (user_id, date DESC, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS loan_simulations (
   id VARCHAR(64) PRIMARY KEY,
@@ -40,7 +41,7 @@ CREATE INDEX IF NOT EXISTS idx_loan_simulations_user_created ON loan_simulations
 
 CREATE TABLE IF NOT EXISTS savings_challenge (
   id VARCHAR(64) PRIMARY KEY,
-  salary NUMERIC(15, 2) NOT NULL DEFAULT 3044000,
+  salary NUMERIC(15, 2) NOT NULL DEFAULT 0,
   start_month VARCHAR(10) NOT NULL DEFAULT to_char(CURRENT_DATE, 'YYYY-MM'),
   completed_months TEXT NOT NULL DEFAULT '[]',
   user_id INTEGER NOT NULL DEFAULT 1,
@@ -104,7 +105,18 @@ INSERT INTO settings (key, value) VALUES
 ('emergency_fund_saved', '0')
 ON CONFLICT (key) DO NOTHING;
 
--- Default Savings Challenge
-INSERT INTO savings_challenge (id, salary, start_month, completed_months)
-VALUES ('default', 3044000, to_char(CURRENT_DATE, 'YYYY-MM'), '[]')
-ON CONFLICT (id) DO NOTHING;
+-- El reto se configura cuando cada persona guarda su salario.
+
+CREATE TABLE IF NOT EXISTS auth_sessions (
+  token_hash CHAR(64) PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  expires_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_user ON auth_sessions (user_id);
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires ON auth_sessions (expires_at);
+
+CREATE TABLE IF NOT EXISTS auth_login_limits (
+  email TEXT PRIMARY KEY,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  blocked_until TIMESTAMPTZ
+);

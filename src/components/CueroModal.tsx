@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef } from "react";
+import { trapDialogTab } from "@/lib/dialog-keyboard";
 import {
   X,
   MessageCircle,
@@ -22,8 +23,6 @@ interface CueroModalProps {
   isOpen: boolean;
   onClose: () => void;
   currencySymbol: string;
-  budgetAlPedoLimit: number;
-  budgetVariableLimit: number;
   onTransactionCreated: () => void;
 }
 
@@ -48,8 +47,6 @@ export default function CueroModal({
   isOpen,
   onClose,
   currencySymbol,
-  budgetAlPedoLimit,
-  budgetVariableLimit,
   onTransactionCreated,
 }: CueroModalProps) {
   const [amount, setAmount] = useState("");
@@ -128,8 +125,6 @@ export default function CueroModal({
           amount: numAmount,
           description: description.trim() || (category === "al_pedo" ? "Gusto Al Pedo" : "Compra Variable"),
           category,
-          budgetAlPedoLimit,
-          budgetVariableLimit,
         }),
       });
 
@@ -203,7 +198,14 @@ export default function CueroModal({
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/40 backdrop-blur-sm p-0 sm:p-4 overflow-hidden">
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/40 backdrop-blur-sm p-0 sm:p-4 overflow-hidden"
+      role="dialog" aria-modal="true" aria-label="Consultar gasto"
+      onKeyDown={(event) => {
+        if (event.key === "Escape") handleClose();
+        trapDialogTab(event);
+      }}
+    >
       <div
         style={
           dragOffsetY > 0
@@ -419,6 +421,9 @@ export default function CueroModal({
                   </>
                 )}
               </button>
+              <p className="px-1 text-[11px] leading-relaxed text-slate-500">
+                La estimación usa solo tus movimientos cargados. Si la respuesta de IA está activa, se envían a Gemini el gasto y un resumen numérico, sin tu correo.
+              </p>
             </form>
           ) : (
             /* 2. RESULT & VERDICT VIEW */

@@ -17,14 +17,13 @@ import {
   User,
   Share2,
   Copy,
+  KeyRound,
 } from "lucide-react";
 import { triggerHaptic } from "@/lib/haptics";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
 interface SettingsTabProps {
   currentUser?: { id: number; name: string; email: string } | null;
-  currencySymbol: string;
-  currencyCode: string;
-  onSettingsSaved: (symbol: string, code: string) => void;
   onRefreshData: () => void;
   onLogout: () => void;
   onStartTour?: () => void;
@@ -32,18 +31,10 @@ interface SettingsTabProps {
 
 export default function SettingsTab({
   currentUser,
-  currencySymbol,
-  currencyCode,
-  onSettingsSaved,
   onRefreshData,
   onLogout,
   onStartTour,
 }: SettingsTabProps) {
-  const [symbol, setSymbol] = useState(currencySymbol);
-
-  const [code, setCode] = useState(currencyCode);
-  const [savingCurrency, setSavingCurrency] = useState(false);
-  const [currencyMsg, setCurrencyMsg] = useState<string | null>(null);
 
   // Change PIN state
   const [oldPin, setOldPin] = useState("");
@@ -51,6 +42,11 @@ export default function SettingsTab({
   const [pinLoading, setPinLoading] = useState(false);
   const [pinError, setPinError] = useState<string | null>(null);
   const [pinSuccess, setPinSuccess] = useState<string | null>(null);
+  const [recoveryPin, setRecoveryPin] = useState("");
+  const [recoveryCode, setRecoveryCode] = useState<string | null>(null);
+  const [recoveryLoading, setRecoveryLoading] = useState(false);
+  const [recoveryError, setRecoveryError] = useState<string | null>(null);
+  const [recoveryCopied, setRecoveryCopied] = useState(false);
 
   // Seed demo state
   const [seeding, setSeeding] = useState(false);
@@ -59,6 +55,8 @@ export default function SettingsTab({
   // Clear data state
   const [clearing, setClearing] = useState(false);
   const [clearSuccess, setClearSuccess] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [backupNotice, setBackupNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // Invite link state
   const [copiedInvite, setCopiedInvite] = useState(false);
@@ -72,39 +70,14 @@ export default function SettingsTab({
     }
   };
 
-  // Save currency settings
-  const handleSaveCurrency = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSavingCurrency(true);
-    setCurrencyMsg(null);
-    try {
-      const res = await fetch("/api/settings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          currency_symbol: symbol,
-          currency_code: code,
-        }),
-      });
-
-      if (res.ok) {
-        onSettingsSaved(symbol, code);
-        setCurrencyMsg("Configuración de moneda guardada.");
-        setTimeout(() => setCurrencyMsg(null), 3000);
-      }
-    } finally {
-      setSavingCurrency(false);
-    }
-  };
-
   // Change PIN
   const handleChangePin = async (e: React.FormEvent) => {
     e.preventDefault();
     setPinError(null);
     setPinSuccess(null);
 
-    if (newPin.length < 4) {
-      setPinError("El nuevo PIN debe tener al menos 4 caracteres");
+    if (!/^\d{6,12}$/.test(newPin)) {
+      setPinError("El nuevo PIN debe tener de 6 a 12 números");
       return;
     }
 
@@ -124,13 +97,40 @@ export default function SettingsTab({
       if (!res.ok) {
         setPinError(data.error || "Error al cambiar el PIN");
       } else {
-        setPinSuccess("PIN maestro modificado con éxito.");
+        setPinSuccess("PIN de esta cuenta actualizado. Se cerraron las otras sesiones.");
+        setRecoveryCode(null);
         setOldPin("");
         setNewPin("");
         setTimeout(() => setPinSuccess(null), 3000);
       }
+    } catch {
+      setPinError("Sin conexión. No se pudo cambiar el PIN.");
     } finally {
       setPinLoading(false);
+    }
+  };
+
+  const handleGenerateRecoveryCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRecoveryError(null);
+    setRecoveryLoading(true);
+    try {
+      const res = await fetch("/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "create_recovery_code", pin: recoveryPin }),
+      });
+      const data = await res.json();
+      if (!res.ok) setRecoveryError(data.error || "No se pudo generar el código");
+      else {
+        setRecoveryCode(data.code);
+        setRecoveryCopied(false);
+        setRecoveryPin("");
+      }
+    } catch {
+      setRecoveryError("Sin conexión. Intentá de nuevo.");
+    } finally {
+      setRecoveryLoading(false);
     }
   };
 
@@ -151,12 +151,7 @@ export default function SettingsTab({
 
   // Clear all transactions for production clean slate
   const handleClearAllTransactions = async () => {
-    triggerHaptic("warning");
-    const confirmDelete = window.confirm(
-      "¿Estás seguro de que deseas eliminar TODOS los movimientos registrados? Esta acción te dejará con la base de datos limpia para tus finanzas reales."
-    );
-    if (!confirmDelete) return;
-
+    setConfirmClear(false);
     setClearing(true);
     try {
       const res = await fetch("/api/transactions?all=true", { method: "DELETE" });
@@ -165,7 +160,11 @@ export default function SettingsTab({
         setClearSuccess(true);
         onRefreshData();
         setTimeout(() => setClearSuccess(false), 3500);
+      } else {
+        setBackupNotice({ type: "error", text: "No se pudieron eliminar los movimientos. Intentá de nuevo." });
       }
+    } catch {
+      setBackupNotice({ type: "error", text: "Sin conexión. Los movimientos no se eliminaron." });
     } finally {
       setClearing(false);
     }
@@ -194,15 +193,18 @@ export default function SettingsTab({
 
       if (res.ok) {
         triggerHaptic("success");
-        alert("¡Copia de seguridad restaurada correctamente!");
+        setBackupNotice({ type: "success", text: "Copia restaurada correctamente." });
         onRefreshData();
       } else {
         triggerHaptic("error");
-        alert("Error al restaurar el archivo.");
+        const data = await res.json().catch(() => null);
+        setBackupNotice({ type: "error", text: data?.error || "No se pudo restaurar la copia." });
       }
     } catch {
       triggerHaptic("error");
-      alert("El archivo seleccionado no es un JSON de respaldo válido.");
+      setBackupNotice({ type: "error", text: "Archivo inválido o sin conexión. Revisá el JSON e intentá de nuevo." });
+    } finally {
+      e.target.value = "";
     }
   };
 
@@ -226,7 +228,7 @@ export default function SettingsTab({
                 </span>
               </div>
               <p className="text-xs text-slate-500 font-medium">
-                {currentUser?.email || "demo@alpedo.app"}
+                {currentUser?.email || ""}
               </p>
               <p className="flex items-center gap-1.5 text-[11px] text-[#1656DB] font-semibold mt-0.5">
                 <Shield className="h-3.5 w-3.5 shrink-0" /> Tus datos están aislados y protegidos por tu PIN
@@ -276,52 +278,11 @@ export default function SettingsTab({
           <span>Formato de Moneda</span>
         </h3>
         <p className="text-[11px] sm:text-xs text-slate-500 font-medium mb-4 sm:mb-5">
-          Definí cómo se visualizan los montos en la aplicación.
+          Los movimientos se registran en guaraníes paraguayos. No se realiza conversión de monedas.
         </p>
-
-        <form onSubmit={handleSaveCurrency} className="space-y-3.5 sm:space-y-4">
-          <div>
-            <label className="block text-[11px] font-black uppercase tracking-wider text-slate-400 mb-1">
-              Símbolo de Moneda
-            </label>
-            <input
-              type="text"
-              value={symbol}
-              onChange={(e) => setSymbol(e.target.value)}
-              placeholder="₲"
-              className="w-full h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-900 font-mono font-bold focus:bg-white focus:border-blue-500 focus:outline-none transition"
-            />
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-black uppercase tracking-wider text-slate-400 mb-1">
-              Código / Nombre (Ej: PYG, USD)
-            </label>
-            <input
-              type="text"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              placeholder="PYG"
-              className="w-full h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-900 font-mono font-bold focus:bg-white focus:border-blue-500 focus:outline-none transition"
-            />
-          </div>
-
-          {currencyMsg && (
-            <div className="flex items-center gap-1.5 text-xs text-emerald-600 font-bold">
-              <Check className="h-4 w-4" />
-              <span>{currencyMsg}</span>
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={savingCurrency}
-            onClick={() => triggerHaptic("light")}
-            className="w-full sm:w-auto h-11 flex items-center justify-center rounded-xl bg-[#1656DB] px-6 text-xs font-black text-white hover:bg-blue-700 active:scale-95 transition shadow-md shadow-blue-500/20"
-          >
-            {savingCurrency ? "Guardando..." : "Guardar Preferencias"}
-          </button>
-        </form>
+        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-800">
+          ₲ Guaraní paraguayo · PYG
+        </div>
       </div>
 
       {/* 2. PIN Maestro & Seguridad */}
@@ -351,7 +312,7 @@ export default function SettingsTab({
 
           <div>
             <label className="block text-[11px] font-black uppercase tracking-wider text-slate-400 mb-1">
-              Nuevo PIN (Mínimo 4 caracteres)
+              Nuevo PIN (6 a 12 números)
             </label>
             <input
               type="password"
@@ -359,6 +320,8 @@ export default function SettingsTab({
               value={newPin}
               onChange={(e) => setNewPin(e.target.value)}
               placeholder="••••"
+              minLength={6}
+              maxLength={12}
               className="w-full h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-900 font-mono focus:bg-white focus:border-blue-500 focus:outline-none transition"
             />
           </div>
@@ -386,6 +349,25 @@ export default function SettingsTab({
             {pinLoading ? "Actualizando..." : "Actualizar PIN"}
           </button>
         </form>
+      </div>
+
+      <div className="rounded-[28px] border border-slate-100 bg-white p-4 sm:p-6 text-slate-900">
+        <h3 className="flex items-center gap-2 text-sm font-black"><KeyRound className="h-5 w-5 text-[#1656DB]" /> Recuperar acceso</h3>
+        <p className="mt-2 text-xs leading-relaxed text-slate-600">Generá un código de respaldo y guardalo fuera de esta app. Sirve una sola vez si olvidás tu PIN. Al generar otro, el anterior deja de funcionar.</p>
+        <form onSubmit={handleGenerateRecoveryCode} className="mt-4 flex flex-col gap-2">
+          <label htmlFor="recovery-current-pin" className="text-xs font-bold text-slate-600">Confirmá tu PIN actual</label>
+          <input id="recovery-current-pin" type="password" inputMode="numeric" autoComplete="current-password" value={recoveryPin} onChange={(e) => setRecoveryPin(e.target.value)} className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-base" />
+          <button type="submit" disabled={recoveryLoading || !recoveryPin} className="h-11 rounded-xl bg-[#1656DB] px-4 text-xs font-black text-white disabled:opacity-50">{recoveryLoading ? "Generando…" : "Generar código de respaldo"}</button>
+        </form>
+        {recoveryError && <p role="alert" className="mt-2 text-xs font-semibold text-rose-700">{recoveryError}</p>}
+        {recoveryCode && <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3">
+          <p className="text-xs font-bold text-amber-900">Copialo ahora: no volverá a mostrarse.</p>
+          <code className="mt-2 block break-all text-sm font-bold text-slate-900 select-text">{recoveryCode}</code>
+          <div className="mt-3 flex gap-2">
+            <button type="button" onClick={() => void navigator.clipboard.writeText(recoveryCode).then(() => setRecoveryCopied(true)).catch(() => setRecoveryError("No se pudo copiar. Seleccioná el código y guardalo manualmente."))} className="h-10 rounded-xl bg-white px-4 text-xs font-bold text-[#1656DB] border border-blue-200">{recoveryCopied ? "Copiado" : "Copiar"}</button>
+            <button type="button" onClick={() => setRecoveryCode(null)} className="h-10 rounded-xl px-4 text-xs font-bold text-slate-600">Ya lo guardé</button>
+          </div>
+        </div>}
       </div>
 
       {/* 3. Base de Datos & Copias de Seguridad */}
@@ -434,11 +416,11 @@ export default function SettingsTab({
             <span>Datos de Ejemplo & Limpieza</span>
           </h3>
           <p className="text-[11px] sm:text-xs text-slate-500 font-medium mb-3">
-            Cargá números de demostración en Guaraníes o limpialos para usar la app con tus datos reales.
+            Administrá los movimientos de tu cuenta.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-2">
-            <button
+            {process.env.NODE_ENV !== "production" && <button
               onClick={() => {
                 triggerHaptic("light");
                 handleSeedDemo();
@@ -448,10 +430,10 @@ export default function SettingsTab({
             >
               <Database className="h-4 w-4 text-orange-500" />
               <span>{seeding ? "Cargando..." : "Cargar Demo Paraguay"}</span>
-            </button>
+            </button>}
 
             <button
-              onClick={handleClearAllTransactions}
+              onClick={() => { triggerHaptic("warning"); setConfirmClear(true); }}
               disabled={clearing || seeding}
               className="flex-1 h-11 flex items-center justify-center gap-2 rounded-xl bg-rose-50 border border-rose-200 px-4 text-xs font-black text-rose-700 hover:bg-rose-100 active:scale-95 transition"
             >
@@ -471,6 +453,7 @@ export default function SettingsTab({
               ¡Movimientos eliminados! Base limpia para tus finanzas reales.
             </p>
           )}
+          {backupNotice && <p role="status" aria-live="polite" className={`mt-2 text-xs font-bold ${backupNotice.type === "error" ? "text-rose-700" : "text-emerald-700"}`}>{backupNotice.text}</p>}
         </div>
 
         <div className="mt-5 border-t border-slate-100 pt-3">
@@ -516,6 +499,7 @@ export default function SettingsTab({
           </button>
         </div>
       </div>
+      {confirmClear && <ConfirmDialog title="¿Eliminar todos los movimientos?" description="Se borrarán los gastos e ingresos de esta cuenta. Esta acción no se puede deshacer. Descargá un respaldo antes si querés conservarlos." confirmLabel="Eliminar" destructive busy={clearing} onCancel={() => setConfirmClear(false)} onConfirm={() => void handleClearAllTransactions()} />}
     </div>
   );
 }
