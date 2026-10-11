@@ -130,8 +130,8 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "Datos de aporte inválidos" }, { status: 400 });
       }
 
-      const ownedGoal = await db.queryOne<{ id: number }>(
-        "SELECT id FROM couples_goals WHERE id = ? AND user_id = ? AND status = 'active'",
+      const ownedGoal = await db.queryOne<{ id: number; creator_name: string; partner_name: string }>(
+        "SELECT id, creator_name, partner_name FROM couples_goals WHERE id = ? AND user_id = ? AND status = 'active'",
         [goal_id, user.id]
       );
       if (!ownedGoal) {
@@ -139,6 +139,10 @@ export async function POST(req: Request) {
       }
 
       const cleanContributor = String(contributor_name || "Vos").trim().slice(0, 100);
+      const allowedContributors = [ownedGoal.creator_name || "Vos", ownedGoal.partner_name];
+      if (!allowedContributors.includes(cleanContributor)) {
+        return NextResponse.json({ error: "Elegí quién realizó el aporte" }, { status: 400 });
+      }
       const cleanNote = String(note || "Aporte al chanchito").trim().slice(0, 150);
 
       const updatedGoal = await db.withTransaction(async () => {

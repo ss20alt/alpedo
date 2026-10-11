@@ -84,6 +84,7 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
         throw new Error(data.error || "No se pudieron cargar las metas de pareja.");
       }
       setGoal(data.goal);
+      setContribBy(data.goal?.creator_name || "Vos");
       setContributions(data.contributions || []);
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudo cargar la meta compartida.";

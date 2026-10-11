@@ -454,20 +454,24 @@ export default function GroupedExpensesView({
           <p className="text-sm font-bold text-slate-900">
             {search.trim()
               ? `No encontramos gastos para “${search.trim()}”.`
-              : `No hay gastos en la categoría ${filterCategory === "al_pedo" ? "Al Pedo" : filterCategory === "fijo" ? "Fijos" : "Variables"}.`}
+              : filterCategory === "all"
+                ? "Todavía no hay gastos para agrupar."
+                : `No hay gastos en la categoría ${filterCategory === "al_pedo" ? "Al Pedo" : filterCategory === "fijo" ? "Fijos" : "Variables"}.`}
           </p>
           <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto font-medium">
-            {search.trim() && filterCategory !== "all"
-              ? "Probá otro nombre o cambiá el filtro de categoría."
-              : "Probá otro nombre o elegí una categoría distinta para ver sus gastos."}
+            {search.trim() || filterCategory !== "all"
+              ? "Probá otra búsqueda o elegí una categoría distinta para ver sus gastos."
+              : "Cuando registres un gasto, aparecerá aquí agrupado por concepto."}
           </p>
-          <button
-            type="button"
-            onClick={() => { setSearch(""); setFilterCategory("all"); }}
-            className="mt-4 min-h-11 rounded-xl bg-blue-50 px-4 text-sm font-bold text-blue-700 active:scale-[0.98]"
-          >
-            Limpiar búsqueda y filtros
-          </button>
+          {(search.trim() || filterCategory !== "all") && (
+            <button
+              type="button"
+              onClick={() => { setSearch(""); setFilterCategory("all"); }}
+              className="mt-4 min-h-11 rounded-xl bg-blue-50 px-4 text-sm font-bold text-blue-700 active:scale-[0.98]"
+            >
+              Limpiar búsqueda y filtros
+            </button>
+          )}
         </div>
       ) : (
         <div className="space-y-3">

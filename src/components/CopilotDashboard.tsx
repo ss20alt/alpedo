@@ -474,7 +474,10 @@ export default function CopilotDashboard({
 
     const monthElapsedPercent = Math.round((currentDay / totalDays) * 100);
     const budgetTotal = totalBudgeted;
-    const budgetSpentPercent = Math.min(100, Math.round((metrics.totalExpenses / budgetTotal) * 100));
+    const hasBudgetBaseline = budgetTotal > 0;
+    const budgetSpentPercent = hasBudgetBaseline
+      ? Math.min(100, Math.round((metrics.totalExpenses / budgetTotal) * 100))
+      : null;
 
     // Ideal spending target for today
     const idealSpentToday = (budgetTotal / totalDays) * currentDay;
@@ -488,7 +491,10 @@ export default function CopilotDashboard({
     let status: "optimo" | "al_limite" | "acelerado";
     let message = "";
 
-    if (diff < -50000) {
+    if (!hasBudgetBaseline) {
+      status = "al_limite";
+      message = "Registrá tus ingresos para comparar tus gastos con un presupuesto.";
+    } else if (diff < -50000) {
       status = "optimo";
       message = `Vas ${currencySymbol} ${formatMoney(Math.abs(diff))} por debajo de lo previsto.`;
     } else if (diff <= 50000) {
@@ -504,6 +510,7 @@ export default function CopilotDashboard({
       totalDays,
       monthElapsedPercent,
       budgetSpentPercent,
+      hasBudgetBaseline,
       diff,
       projectedSavings,
       dailyBurnRate,
@@ -771,7 +778,7 @@ export default function CopilotDashboard({
               : "bg-rose-100 text-rose-800"
           }`}>
             <span aria-hidden="true" className={`mr-1 inline-block h-1.5 w-1.5 rounded-full ${spendingPace.status === "optimo" ? "bg-emerald-500" : spendingPace.status === "al_limite" ? "bg-amber-500" : "bg-rose-500"}`} />
-            {spendingPace.status === "optimo" ? "Ritmo Óptimo" : spendingPace.status === "al_limite" ? "Al Límite" : "Acelerado"}
+            {!spendingPace.hasBudgetBaseline ? "Sin ingresos" : spendingPace.status === "optimo" ? "Ritmo Óptimo" : spendingPace.status === "al_limite" ? "Al Límite" : "Acelerado"}
           </span>
         </div>
 
@@ -794,11 +801,13 @@ export default function CopilotDashboard({
             <div className="flex justify-between text-[11px] font-bold text-slate-600 mb-1">
               <span>Presupuesto consumido</span>
               <span className={`font-mono font-black ${
-                spendingPace.budgetSpentPercent > spendingPace.monthElapsedPercent
+                spendingPace.budgetSpentPercent !== null && spendingPace.budgetSpentPercent > spendingPace.monthElapsedPercent
                   ? "text-rose-600"
+                  : spendingPace.budgetSpentPercent === null
+                  ? "text-slate-500"
                   : "text-emerald-600"
               }`}>
-                {spendingPace.budgetSpentPercent}%
+                {spendingPace.budgetSpentPercent === null ? "Sin datos" : `${spendingPace.budgetSpentPercent}%`}
               </span>
             </div>
             <div className="h-2 w-full rounded-full bg-slate-100 overflow-hidden">
@@ -810,7 +819,7 @@ export default function CopilotDashboard({
                     ? "bg-amber-500"
                     : "bg-rose-500"
                 }`}
-                style={{ width: `${Math.min(100, spendingPace.budgetSpentPercent)}%` }}
+                style={{ width: `${spendingPace.budgetSpentPercent ?? 0}%` }}
               />
             </div>
           </div>
@@ -987,6 +996,7 @@ export default function CopilotDashboard({
               {recentExpenses.map((tx) => {
                 const initial = tx.description.charAt(0).toUpperCase() || "M";
                 const isAlPedo = tx.category === "al_pedo";
+                const isFixed = tx.category === "fijo";
                 return (
                   <div
                     key={tx.id}
@@ -1016,7 +1026,7 @@ export default function CopilotDashboard({
                             : "bg-blue-50 text-blue-600 border border-blue-200/60"
                         }`}
                       >
-                        <><FinanceIcon name={isAlPedo ? "flame" : "briefcase"} className="mr-1 h-3 w-3" />{isAlPedo ? "AL PEDO" : "VARIABLE"}</>
+                        <><FinanceIcon name={isAlPedo ? "flame" : isFixed ? "home" : "briefcase"} className="mr-1 h-3 w-3" />{isAlPedo ? "AL PEDO" : isFixed ? "FIJO" : "VARIABLE"}</>
                       </span>
                       <div className="flex items-center gap-1">
                         <span className="text-xs sm:text-sm font-extrabold text-slate-900">
@@ -1036,13 +1046,19 @@ export default function CopilotDashboard({
           <div className="mt-4 pt-3 border-t border-slate-100">
             <button
               onClick={handleToggleReviewed}
+              disabled={recentExpenses.length === 0}
+              aria-label={recentExpenses.length === 0 ? "No hay movimientos para revisar" : undefined}
               className={`w-full py-3 rounded-full text-xs font-black tracking-wide transition active:scale-[0.98] ${
-                reviewed
+                recentExpenses.length === 0
+                  ? "cursor-not-allowed bg-slate-50 text-slate-400"
+                  : reviewed
                   ? "bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-100"
                   : "bg-[#EEF4FF] text-[#1D64E5] hover:bg-blue-100"
               }`}
             >
-              {reviewed ? "✓ TODOS REVISADOS (Tocar para desmarcar)" : "MARCAR COMO REVISADO"}
+              {recentExpenses.length === 0
+                ? "SIN MOVIMIENTOS PARA REVISAR"
+                : reviewed ? "✓ TODOS REVISADOS (Tocar para desmarcar)" : "MARCAR COMO REVISADO"}
             </button>
           </div>
         </div>
