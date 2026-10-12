@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Heart,
   Plane,
@@ -21,6 +21,8 @@ import {
 import FinanceIcon, { type FinanceIconName } from "@/components/FinanceIcon";
 import { formatParaguayDateLabel, getParaguayDateString } from "@/lib/date-utils";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import SectionSkeleton from "@/components/SectionSkeleton";
+import { getPrefetchedSectionData, peekPrefetchedSectionData, refreshSectionData } from "@/lib/section-data-cache";
 
 interface CouplesGoal {
   id: number;
@@ -53,6 +55,13 @@ interface Contribution {
 
 interface CouplesTabProps {
   currencySymbol?: string;
+  userId: number;
+  active?: boolean;
+}
+
+interface CouplesData {
+  goal: CouplesGoal | null;
+  contributions: Contribution[];
 }
 
 async function copyTextWithFallback(text: string) {
@@ -88,10 +97,13 @@ async function copyTextWithFallback(text: string) {
   return copied;
 }
 
-export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) {
-  const [goal, setGoal] = useState<CouplesGoal | null>(null);
-  const [contributions, setContributions] = useState<Contribution[]>([]);
-  const [loading, setLoading] = useState(true);
+export default function CouplesTab({ currencySymbol = "₲", userId, active = true }: CouplesTabProps) {
+  const cachedCouples = peekPrefetchedSectionData<CouplesData>("/api/couples", userId);
+  const hasLoadedOnce = useRef(Boolean(cachedCouples));
+  const hasActivated = useRef(false);
+  const [goal, setGoal] = useState<CouplesGoal | null>(cachedCouples?.goal ?? null);
+  const [contributions, setContributions] = useState<Contribution[]>(cachedCouples?.contributions ?? []);
+  const [loading, setLoading] = useState(!cachedCouples);
   const [copied, setCopied] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [notice, setNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -112,24 +124,23 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
   const [contribNote, setContribNote] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const fetchCouplesData = useCallback(async (showLoading = true) => {
+  const fetchCouplesData = useCallback(async (showLoading = true, force = false) => {
     try {
       if (showLoading) setLoading(true);
       setLoadError("");
-      const res = await fetch("/api/couples", { cache: "no-store" });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "No se pudieron cargar las metas de pareja.");
-      }
+      const data = force
+        ? await refreshSectionData<CouplesData>("/api/couples", userId)
+        : await getPrefetchedSectionData<CouplesData>("/api/couples", userId);
       setGoal(data.goal);
       setContributions(data.contributions || []);
+      hasLoadedOnce.current = true;
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudo cargar la meta compartida.";
       setLoadError(message);
     } finally {
       if (showLoading) setLoading(false);
     }
-  }, []);
+  }, [userId]);
 
   const resetNewGoal = () => {
     setTitle("");
@@ -141,18 +152,23 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
   };
 
   useEffect(() => {
-    const timer = window.setTimeout(() => void fetchCouplesData(), 0);
+    if (!active) return;
+    const shouldRefresh = hasActivated.current && hasLoadedOnce.current;
+    hasActivated.current = true;
+    const timer = window.setTimeout(() => void fetchCouplesData(!hasLoadedOnce.current, shouldRefresh), 0);
     const interval = window.setInterval(() => {
-      if (!document.hidden) void fetchCouplesData(false);
+      if (active && !document.hidden) void fetchCouplesData(false, true);
     }, 30_000);
-    const refreshOnFocus = () => void fetchCouplesData(false);
+    const refreshOnFocus = () => {
+      if (active) void fetchCouplesData(false, true);
+    };
     window.addEventListener("focus", refreshOnFocus);
     return () => {
       window.clearTimeout(timer);
       window.clearInterval(interval);
       window.removeEventListener("focus", refreshOnFocus);
     };
-  }, [fetchCouplesData]);
+  }, [active, fetchCouplesData]);
 
   const handleCreateGoal = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -174,7 +190,7 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
       if (res.ok) {
         resetNewGoal();
         setNotice({ type: "success", text: "Meta creada. Ya podés empezar a registrar aportes." });
-        await fetchCouplesData();
+        await fetchCouplesData(false, true);
       } else {
         const data = await res.json().catch(() => null);
         setNotice({ type: "error", text: data?.error || "No se pudo crear la meta. Revisá los datos e intentá de nuevo." });
@@ -207,7 +223,7 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
         setContribAmount("");
         setContribNote("");
         setNotice({ type: "success", text: "Aporte sumado a la meta." });
-        await fetchCouplesData();
+        await fetchCouplesData(false, true);
       } else {
         const data = await res.json().catch(() => null);
         setNotice({ type: "error", text: data?.error || "No se pudo registrar el aporte. Revisá el monto e intentá de nuevo." });
@@ -233,7 +249,7 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
       if (!res.ok) throw new Error(data?.error || "No se pudo vincular la meta. Revisá el código.");
       setJoinCode("");
       setNotice({ type: "success", text: "Meta vinculada. Los aportes y el progreso se sincronizan entre las dos cuentas." });
-      await fetchCouplesData();
+      await fetchCouplesData(false, true);
     } catch (error) {
       setNotice({ type: "error", text: error instanceof Error ? error.message : "No se pudo vincular la meta." });
     } finally {
@@ -291,15 +307,10 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
   };
 
   if (loading) {
-    return (
-      <div className="flex min-h-56 items-center justify-center" role="status" aria-live="polite">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" aria-hidden="true" />
-        <span className="sr-only">Cargando metas compartidas</span>
-      </div>
-    );
+    return <SectionSkeleton label="Cargando metas compartidas" />;
   }
 
-  if (loadError) {
+  if (loadError && !hasLoadedOnce.current) {
     return (
       <div className="mx-auto max-w-lg rounded-2xl border border-rose-200 bg-rose-50 p-5 text-center text-rose-900" role="alert">
         <CircleAlert className="mx-auto mb-2 h-6 w-6" aria-hidden="true" />
@@ -311,6 +322,12 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
 
   return (
     <div className="mx-auto max-w-4xl space-y-4 px-1 pb-8 sm:space-y-6 sm:pb-12">
+      {loadError && hasLoadedOnce.current && (
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="status">
+          <span>No se pudo actualizar la meta. Se muestra la última información cargada.</span>
+          <button type="button" onClick={() => void fetchCouplesData(false, true)} className="min-h-10 shrink-0 rounded-xl bg-white px-3 font-bold text-amber-800 shadow-sm">Reintentar</button>
+        </div>
+      )}
       {notice && (
         <div className={`flex items-start gap-2 rounded-2xl border p-3 text-sm font-semibold ${notice.type === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-rose-200 bg-rose-50 text-rose-800"}`} role="status" aria-live="polite">
           {notice.type === "success" ? <Check className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" /> : <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />}

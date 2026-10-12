@@ -21,6 +21,7 @@ import {
   HelpCircle,
   ChevronLeft,
   ChevronRight,
+  Flame,
 } from "lucide-react";
 import { Transaction, FinancialMetrics } from "@/lib/finance-engine";
 import PinModal from "@/components/PinModal";
@@ -31,12 +32,18 @@ import { triggerHaptic } from "@/lib/haptics";
 import { trapDialogTab } from "@/lib/dialog-keyboard";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { formatParaguayMonthLabel, getParaguayMonthString } from "@/lib/date-utils";
+import { clearPrefetchedSectionData, prefetchSectionData } from "@/lib/section-data-cache";
+import SectionSkeleton from "@/components/SectionSkeleton";
 
-const sectionLoading = () => (
-  <div className="rounded-[24px] bg-white p-6 text-center text-sm text-slate-600" role="status">
-    Cargando sección…
-  </div>
-);
+type PrefetchableTab = "couples" | "challenge" | "streaks";
+
+function prefetchSectionModule(tab: PrefetchableTab) {
+  if (tab === "couples") void import("@/components/CouplesTab");
+  if (tab === "challenge") void import("@/components/ChallengeTab");
+  if (tab === "streaks") void import("@/components/StreaksTab");
+}
+
+const sectionLoading = () => <SectionSkeleton label="Preparando sección" />;
 const TransactionModal = dynamic(() => import("@/components/TransactionModal"), { loading: sectionLoading });
 const LoanSimulator = dynamic(() => import("@/components/LoanSimulator"), { loading: sectionLoading });
 const TransactionsList = dynamic(() => import("@/components/TransactionsList"), { loading: sectionLoading });
@@ -65,6 +72,7 @@ export default function Home() {
   const [authError, setAuthError] = useState(false);
 
   const [currentTab, setCurrentTabState] = useState<TourStep["targetTab"]>("dashboard");
+  const [visitedAsyncTabs, setVisitedAsyncTabs] = useState<PrefetchableTab[]>([]);
   const [selectedMonth, setSelectedMonth] = useState<string>(() => {
     return getParaguayMonthString();
   });
@@ -157,6 +165,10 @@ export default function Home() {
   const setCurrentTab = (tab: TourStep["targetTab"]) => {
     if (tab !== "transactions" && tab !== "grouped") {
       setSelectedMonth((month) => month === "all" ? getParaguayMonthString() : month);
+    }
+    if (tab === "couples" || tab === "challenge" || tab === "streaks") {
+      setVisitedAsyncTabs((visited) => visited.includes(tab) ? visited : [...visited, tab]);
+      prefetchSectionModule(tab);
     }
     setCurrentTabState(tab);
   };
@@ -380,6 +392,19 @@ export default function Home() {
     return () => window.clearTimeout(timer);
   }, [isAuthenticated, fetchData, fetchSettings]);
 
+  useEffect(() => {
+    if (!isAuthenticated || !currentUser?.id || !metrics || dataLoading) return;
+    const timer = window.setTimeout(() => {
+      if (document.visibilityState !== "visible") return;
+      void Promise.allSettled([
+        prefetchSectionData("/api/couples", currentUser.id),
+        prefetchSectionData("/api/challenge", currentUser.id),
+        prefetchSectionData("/api/streaks", currentUser.id),
+      ]);
+    }, 650);
+    return () => window.clearTimeout(timer);
+  }, [isAuthenticated, currentUser?.id, metrics, dataLoading]);
+
   const handleLogout = async () => {
     try {
       await fetch("/api/auth", {
@@ -392,6 +417,7 @@ export default function Home() {
     }
     dataRequestId.current += 1;
     dataAbortController.current?.abort();
+    if (currentUser?.id) clearPrefetchedSectionData(currentUser.id);
     try { localStorage.removeItem("alpedo_active_user_id"); } catch { /* El almacenamiento local puede estar deshabilitado. */ }
     setIsAuthenticated(false);
     setCurrentUser(null);
@@ -399,6 +425,7 @@ export default function Home() {
     setTransactions([]);
     setTransactionCount(0);
     setPrivacyMode(false);
+    setVisitedAsyncTabs([]);
   };
 
   const handleDeleteTransaction = async (id: string) => {
@@ -612,7 +639,7 @@ export default function Home() {
               <div
                 ref={tabsContainerRef}
                 onScroll={updateTabScrollEdges}
-                className="flex items-center gap-0 sm:gap-1.5 overflow-x-auto overscroll-x-contain no-scrollbar scroll-smooth motion-reduce:scroll-auto py-0.5 pr-3"
+                className="flex items-center gap-0 sm:gap-1.5 overflow-x-auto overscroll-x-contain no-scrollbar scroll-smooth motion-reduce:scroll-auto py-0.5 pr-1 sm:pr-3"
               >
                 <button
                   data-tab="dashboard"
@@ -634,7 +661,7 @@ export default function Home() {
                   data-tab="grouped"
                   aria-current={currentTab === "grouped" ? "page" : undefined}
                   onClick={() => setCurrentTab("grouped")}
-                  className={navTabClass("grouped")}
+                  className={`${navTabClass("grouped")} hidden md:flex`}
                 >
                   Comercios
                 </button>
@@ -650,7 +677,8 @@ export default function Home() {
                   data-tab="challenge"
                   aria-current={currentTab === "challenge" ? "page" : undefined}
                   onClick={() => setCurrentTab("challenge")}
-                  className={navTabClass("challenge")}
+                  className={`${navTabClass("challenge")} hidden md:flex`}
+                  onPointerEnter={() => prefetchSectionModule("challenge")}
                 >
                   Reto 1%
                 </button>
@@ -658,7 +686,8 @@ export default function Home() {
                   data-tab="streaks"
                   aria-current={currentTab === "streaks" ? "page" : undefined}
                   onClick={() => setCurrentTab("streaks")}
-                  className={navTabClass("streaks")}
+                  className={`${navTabClass("streaks")} hidden md:flex`}
+                  onPointerEnter={() => prefetchSectionModule("streaks")}
                 >
                   Rachas
                 </button>
@@ -666,7 +695,7 @@ export default function Home() {
                   data-tab="loans"
                   aria-current={currentTab === "loans" ? "page" : undefined}
                   onClick={() => setCurrentTab("loans")}
-                  className={navTabClass("loans")}
+                  className={`${navTabClass("loans")} hidden md:flex`}
                 >
                   Préstamos
                 </button>
@@ -698,7 +727,7 @@ export default function Home() {
                 }}
                 aria-label="Mes de movimientos"
                 title="Elegir mes"
-                className="h-10 w-[5.25rem] appearance-none rounded-full border border-white/30 bg-white/10 pl-6 pr-1.5 text-[11px] font-bold text-white shadow-sm shadow-blue-950/10 transition-[background-color,border-color,box-shadow,transform] duration-200 ease-out motion-reduce:transition-none hover:border-white/45 hover:bg-white/20 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 cursor-pointer"
+                className="h-10 w-20 appearance-none rounded-full border border-white/30 bg-white/10 pl-6 pr-1.5 text-[11px] font-bold text-white shadow-sm shadow-blue-950/10 transition-[background-color,border-color,box-shadow,transform] duration-200 ease-out motion-reduce:transition-none hover:border-white/45 hover:bg-white/20 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 cursor-pointer"
               >
                 <option value={currentMonth} className="text-slate-900 bg-white">
                   {formatParaguayMonthLabel(currentMonth)}
@@ -837,13 +866,17 @@ export default function Home() {
             )}
 
             {/* 2. METAS EN PAREJA VIEW */}
-            {currentTab === "couples" && (
-              privacyMode ? <PrivateSection /> : <CouplesTab currencySymbol={currencySymbol} />
+            {visitedAsyncTabs.includes("couples") && (
+              <div hidden={currentTab !== "couples"} aria-hidden={currentTab !== "couples"}>
+                {privacyMode ? <PrivateSection /> : <CouplesTab userId={currentUser?.id ?? 0} active={currentTab === "couples"} currencySymbol={currencySymbol} />}
+              </div>
             )}
 
             {/* 3. RACHAS & DUELOS VIEW */}
-            {currentTab === "streaks" && (
-              privacyMode ? <PrivateSection /> : <StreaksTab />
+            {visitedAsyncTabs.includes("streaks") && (
+              <div hidden={currentTab !== "streaks"} aria-hidden={currentTab !== "streaks"}>
+                {privacyMode ? <PrivateSection /> : <StreaksTab userId={currentUser?.id ?? 0} active={currentTab === "streaks"} />}
+              </div>
             )}
 
             {/* 4. LOANS SIMULATOR VIEW */}
@@ -852,8 +885,10 @@ export default function Home() {
             )}
 
             {/* 5. RETO 1% VIEW */}
-            {currentTab === "challenge" && (
-              privacyMode ? <PrivateSection /> : <ChallengeTab currencySymbol={currencySymbol} />
+            {visitedAsyncTabs.includes("challenge") && (
+              <div hidden={currentTab !== "challenge"} aria-hidden={currentTab !== "challenge"}>
+                {privacyMode ? <PrivateSection /> : <ChallengeTab userId={currentUser?.id ?? 0} active={currentTab === "challenge"} currencySymbol={currencySymbol} />}
+              </div>
             )}
 
             {/* 6. TRANSACTIONS VIEW */}
@@ -966,7 +1001,7 @@ export default function Home() {
               openToolsSheet();
             }}
             className={`flex flex-col items-center justify-center gap-1 h-full transition active:scale-90 ${
-              currentTab === "loans" || currentTab === "settings" || currentTab === "grouped"
+              currentTab === "loans" || currentTab === "settings" || currentTab === "grouped" || currentTab === "challenge" || currentTab === "streaks"
                 ? "text-[#1656DB] font-black"
                 : "text-slate-400 hover:text-slate-600"
             }`}
@@ -1058,49 +1093,36 @@ export default function Home() {
                 <ChevronRight className="h-4 w-4 shrink-0 text-blue-500 transition-transform duration-200 group-hover:translate-x-0.5 motion-reduce:transition-none" />
               </button>
 
-              <button
-                onClick={() => {
-                  setCurrentTab("loans");
-                  closeToolsSheet();
-                }}
-                aria-current={currentTab === "loans" ? "page" : undefined}
-                className={`group flex min-h-[60px] w-full items-center gap-3 rounded-2xl border px-3 py-2 text-left transition-[background-color,border-color,box-shadow,transform] duration-200 active:scale-[0.99] motion-reduce:transition-none ${
-                  currentTab === "loans"
-                    ? "border-blue-200 bg-blue-50/80 text-blue-700"
-                    : "border-slate-200/80 bg-white text-slate-800 hover:border-slate-300 hover:bg-slate-50"
-                }`}
-              >
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-                  <Calculator className="h-[18px] w-[18px]" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-[13px] font-bold text-slate-900">Préstamos</div>
-                  <div className="mt-0.5 text-[11px] text-slate-500">Cuotas e impacto</div>
-                </div>
-                <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
-              </button>
-
-              <button
-                onClick={() => {
-                  setCurrentTab("grouped");
-                  closeToolsSheet();
-                }}
-                aria-current={currentTab === "grouped" ? "page" : undefined}
-                className={`group flex min-h-[60px] w-full items-center gap-3 rounded-2xl border px-3 py-2 text-left transition-[background-color,border-color,box-shadow,transform] duration-200 active:scale-[0.99] motion-reduce:transition-none ${
-                  currentTab === "grouped"
-                    ? "border-cyan-200 bg-cyan-50/80 text-cyan-700"
-                    : "border-slate-200/80 bg-white text-slate-800 hover:border-slate-300 hover:bg-slate-50"
-                }`}
-              >
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-cyan-50 text-cyan-600">
-                  <Layers className="h-[18px] w-[18px]" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-[13px] font-bold text-slate-900">Por Comercio</div>
-                  <div className="mt-0.5 text-[11px] text-slate-500">Bolt, Biggie, Super</div>
-                </div>
-                <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
-              </button>
+              <div className="grid grid-cols-2 gap-2">
+                {([
+                  { tab: "grouped", label: "Por Comercio", icon: Layers, tone: "cyan" },
+                  { tab: "challenge", label: "Reto 1%", icon: TrendingUp, tone: "orange" },
+                  { tab: "streaks", label: "Rachas", icon: Flame, tone: "amber" },
+                  { tab: "loans", label: "Préstamos", icon: Calculator, tone: "blue" },
+                ] as const).map(({ tab, label, icon: Icon, tone }) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    onPointerEnter={() => {
+                      if (tab === "challenge" || tab === "streaks") prefetchSectionModule(tab);
+                    }}
+                    onPointerDown={() => {
+                      if (tab === "challenge" || tab === "streaks") prefetchSectionModule(tab);
+                    }}
+                    onClick={() => {
+                      setCurrentTab(tab);
+                      closeToolsSheet();
+                    }}
+                    aria-current={currentTab === tab ? "page" : undefined}
+                    className={`flex min-h-12 items-center gap-2 rounded-2xl border px-3 py-2 text-left transition-[background-color,border-color,transform] duration-200 active:scale-[0.98] motion-reduce:transition-none ${currentTab === tab ? "border-blue-200 bg-blue-50 text-blue-700" : "border-slate-200/80 bg-white text-slate-800 hover:border-slate-300 hover:bg-slate-50"}`}
+                  >
+                    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${tone === "cyan" ? "bg-cyan-50 text-cyan-600" : tone === "orange" ? "bg-orange-50 text-orange-600" : tone === "amber" ? "bg-amber-50 text-amber-600" : "bg-blue-50 text-blue-600"}`}>
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <span className="min-w-0 text-[12px] font-bold">{label}</span>
+                  </button>
+                ))}
+              </div>
 
               <button
                 onClick={() => {

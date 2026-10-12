@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState, useRef } from "react";
 import {
   Check,
   Flame,
@@ -16,6 +16,8 @@ import {
   X,
 } from "lucide-react";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import SectionSkeleton from "@/components/SectionSkeleton";
+import { getPrefetchedSectionData, peekPrefetchedSectionData, refreshSectionData } from "@/lib/section-data-cache";
 
 interface FriendStreak {
   friend_code: string;
@@ -43,9 +45,17 @@ async function readApiError(response: Response, fallback: string) {
   }
 }
 
-export default function StreaksTab() {
-  const [data, setData] = useState<StreaksData | null>(null);
-  const [loading, setLoading] = useState(true);
+interface StreaksTabProps {
+  userId: number;
+  active?: boolean;
+}
+
+export default function StreaksTab({ userId, active = true }: StreaksTabProps) {
+  const cachedStreaks = peekPrefetchedSectionData<StreaksData>("/api/streaks", userId);
+  const hasLoadedOnce = useRef(Boolean(cachedStreaks));
+  const hasActivated = useRef(false);
+  const [data, setData] = useState<StreaksData | null>(cachedStreaks);
+  const [loading, setLoading] = useState(!cachedStreaks);
   const [loadError, setLoadError] = useState("");
   const [actionError, setActionError] = useState("");
   const [feedback, setFeedback] = useState("");
@@ -60,26 +70,30 @@ export default function StreaksTab() {
   const [leaderboardName, setLeaderboardName] = useState("");
   const [isSavingLeaderboard, setIsSavingLeaderboard] = useState(false);
 
-  const fetchStreaksData = useCallback(async (showLoading = true) => {
+  const fetchStreaksData = useCallback(async (showLoading = true, force = false) => {
     if (showLoading) setLoading(true);
     setLoadError("");
     try {
-      const response = await fetch("/api/streaks", { cache: "no-store" });
-      if (!response.ok) throw new Error(await readApiError(response, "No pudimos cargar Rachas."));
-      const nextData = (await response.json()) as StreaksData;
+      const nextData = force
+        ? await refreshSectionData<StreaksData>("/api/streaks", userId)
+        : await getPrefetchedSectionData<StreaksData>("/api/streaks", userId);
       setData(nextData);
       setLeaderboardName(nextData.leaderboardName || "");
+      hasLoadedOnce.current = true;
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : "No pudimos cargar Rachas.");
     } finally {
       if (showLoading) setLoading(false);
     }
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => void fetchStreaksData(), 0);
+    if (!active) return;
+    const shouldRefresh = hasActivated.current && hasLoadedOnce.current;
+    hasActivated.current = true;
+    const timer = window.setTimeout(() => void fetchStreaksData(!hasLoadedOnce.current, shouldRefresh), 0);
     return () => window.clearTimeout(timer);
-  }, [fetchStreaksData]);
+  }, [active, fetchStreaksData]);
 
   const shareCode = async () => {
     if (!data?.myFriendCode) return;
@@ -137,7 +151,7 @@ export default function StreaksTab() {
 
       setInputFriendCode("");
       setFeedback("Duelo conectado en ambas cuentas. Cada uno puede editar el apodo desde su lista.");
-      await fetchStreaksData(false);
+      await fetchStreaksData(false, true);
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "No se pudo conectar el duelo.");
     } finally {
@@ -164,7 +178,7 @@ export default function StreaksTab() {
       setEditingFriendCode(null);
       setEditedFriendName("");
       setFeedback("Apodo actualizado. Solo cambia cómo te aparece a vos.");
-      await fetchStreaksData(false);
+      await fetchStreaksData(false, true);
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "No se pudo guardar el apodo.");
     } finally {
@@ -185,7 +199,7 @@ export default function StreaksTab() {
       });
       if (!response.ok) throw new Error(await readApiError(response, "No se pudo eliminar el duelo."));
       setFeedback("Duelo desvinculado de ambas cuentas.");
-      await fetchStreaksData(false);
+      await fetchStreaksData(false, true);
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "No se pudo eliminar el duelo.");
     } finally {
@@ -206,7 +220,7 @@ export default function StreaksTab() {
       });
       if (!response.ok) throw new Error(await readApiError(response, "No se pudo activar el ranking."));
       setFeedback("Tu apodo y racha ya aparecen en el ranking. Podés salir cuando quieras.");
-      await fetchStreaksData(false);
+      await fetchStreaksData(false, true);
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "No se pudo actualizar el ranking.");
     } finally {
@@ -226,7 +240,7 @@ export default function StreaksTab() {
       });
       if (!response.ok) throw new Error(await readApiError(response, "No se pudo salir del ranking."));
       setFeedback("Tu apodo y racha ya no aparecen en el ranking comunitario.");
-      await fetchStreaksData(false);
+      await fetchStreaksData(false, true);
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "No se pudo salir del ranking.");
     } finally {
@@ -235,20 +249,16 @@ export default function StreaksTab() {
   };
 
   if (loading) {
-    return (
-      <div className="mx-auto flex min-h-64 max-w-4xl items-center justify-center" role="status" aria-label="Cargando Rachas">
-        <LoaderCircle className="h-8 w-8 animate-spin text-orange-500" />
-      </div>
-    );
+    return <SectionSkeleton label="Cargando Rachas" />;
   }
 
-  if (loadError || !data) {
+  if (!data) {
     return (
       <div className="mx-auto max-w-4xl rounded-3xl border border-rose-100 bg-white p-6 text-center shadow-sm">
         <p className="text-sm font-semibold text-slate-700">{loadError || "No pudimos cargar Rachas."}</p>
         <button
           type="button"
-          onClick={() => void fetchStreaksData()}
+          onClick={() => void fetchStreaksData(true, true)}
           className="mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-bold text-white active:scale-[0.98]"
         >
           <RefreshCw className="h-4 w-4" />
@@ -262,6 +272,12 @@ export default function StreaksTab() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-4 pb-8 text-slate-900 sm:space-y-6 sm:pb-12">
+      {loadError && hasLoadedOnce.current && (
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="status">
+          <span>No se pudo actualizar Rachas. Se muestra la última información cargada.</span>
+          <button type="button" onClick={() => void fetchStreaksData(false, true)} className="min-h-10 shrink-0 rounded-xl bg-white px-3 font-bold text-amber-800 shadow-sm">Reintentar</button>
+        </div>
+      )}
       <section
         id="tour-streaks-card"
         className="app-mobile-surface overflow-hidden rounded-[26px] border border-orange-200/80 bg-gradient-to-br from-orange-50 via-white to-amber-50 p-4 shadow-[0_4px_24px_rgba(249,115,22,0.06)] sm:rounded-[28px] sm:p-8"

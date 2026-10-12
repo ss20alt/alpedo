@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Flame,
   CheckCircle2,
@@ -10,25 +10,41 @@ import {
   Lightbulb,
   Check,
   CircleAlert,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { getParaguayMonthString } from "@/lib/date-utils";
+import SectionSkeleton from "@/components/SectionSkeleton";
+import { getPrefetchedSectionData, peekPrefetchedSectionData, refreshSectionData } from "@/lib/section-data-cache";
 
 interface ChallengeTabProps {
   currencySymbol: string;
+  userId: number;
+  active?: boolean;
 }
 
-export default function ChallengeTab({ currencySymbol }: ChallengeTabProps) {
-  const [salary, setSalary] = useState<number>(0);
-  const [startMonth, setStartMonth] = useState<string>(getParaguayMonthString());
-  const [completedMonths, setCompletedMonths] = useState<number[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+interface ChallengeData {
+  salary: number;
+  start_month: string;
+  completed_months: number[];
+}
+
+export default function ChallengeTab({ currencySymbol, userId, active = true }: ChallengeTabProps) {
+  const cachedChallenge = peekPrefetchedSectionData<ChallengeData>("/api/challenge", userId);
+  const hasLoadedOnce = useRef(Boolean(cachedChallenge));
+  const hasActivated = useRef(false);
+  const [salary, setSalary] = useState<number>(cachedChallenge?.salary ?? 0);
+  const [startMonth, setStartMonth] = useState<string>(cachedChallenge?.start_month ?? getParaguayMonthString());
+  const [completedMonths, setCompletedMonths] = useState<number[]>(cachedChallenge?.completed_months ?? []);
+  const [loading, setLoading] = useState<boolean>(!cachedChallenge);
   const [loadError, setLoadError] = useState("");
-  const [salaryDraft, setSalaryDraft] = useState("");
-  const [startMonthDraft, setStartMonthDraft] = useState(getParaguayMonthString());
+  const [salaryDraft, setSalaryDraft] = useState(cachedChallenge ? String(cachedChallenge.salary) : "");
+  const [startMonthDraft, setStartMonthDraft] = useState(cachedChallenge?.start_month ?? getParaguayMonthString());
   const [isSavingConfig, setIsSavingConfig] = useState(false);
   const [savingMonthIndex, setSavingMonthIndex] = useState<number | null>(null);
   const [notice, setNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [showAllMonths, setShowAllMonths] = useState(false);
 
   const monthNames = [
     "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -36,29 +52,33 @@ export default function ChallengeTab({ currencySymbol }: ChallengeTabProps) {
   ];
 
   // Load challenge from API
-  const fetchChallenge = async () => {
+  const fetchChallenge = useCallback(async (showLoading = true, force = false) => {
       try {
-        setLoading(true);
+        if (showLoading) setLoading(true);
         setLoadError("");
-        const res = await fetch("/api/challenge");
-        const data = await res.json().catch(() => null);
-        if (!res.ok) throw new Error(data?.error || "No se pudo cargar el reto.");
+        const data = force
+          ? await refreshSectionData<ChallengeData>("/api/challenge", userId)
+          : await getPrefetchedSectionData<ChallengeData>("/api/challenge", userId);
         setSalary(data.salary);
         setSalaryDraft(String(data.salary));
         setStartMonth(data.start_month);
         setStartMonthDraft(data.start_month);
         setCompletedMonths(Array.isArray(data.completed_months) ? data.completed_months : []);
+        hasLoadedOnce.current = true;
       } catch (error) {
         setLoadError(error instanceof Error ? error.message : "No se pudo cargar el reto.");
       } finally {
-        setLoading(false);
+        if (showLoading) setLoading(false);
       }
-    };
+    }, [userId]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => void fetchChallenge(), 0);
+    if (!active) return;
+    const shouldRefresh = hasActivated.current && hasLoadedOnce.current;
+    hasActivated.current = true;
+    const timer = window.setTimeout(() => void fetchChallenge(!hasLoadedOnce.current, shouldRefresh), 0);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [active, fetchChallenge]);
 
   // Save configuration only after the user finishes editing.
   const saveConfig = async (e: React.FormEvent) => {
@@ -83,6 +103,8 @@ export default function ChallengeTab({ currencySymbol }: ChallengeTabProps) {
       setSalaryDraft(String(data.salary));
       setStartMonth(data.start_month);
       setStartMonthDraft(data.start_month);
+      hasLoadedOnce.current = true;
+      void fetchChallenge(false, true);
       setNotice({ type: "success", text: "Configuración guardada." });
     } catch (error) {
       setNotice({ type: "error", text: error instanceof Error ? error.message : "No se pudo guardar. Probá de nuevo." });
@@ -104,6 +126,7 @@ export default function ChallengeTab({ currencySymbol }: ChallengeTabProps) {
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error || "No se pudo actualizar este mes.");
       setCompletedMonths(data.completed_months);
+      void fetchChallenge(false, true);
       setNotice({ type: "success", text: data.completed_months.includes(monthIndex) ? "Mes marcado como cumplido." : "Se quitó la marca de este mes." });
     } catch (error) {
       setNotice({ type: "error", text: error instanceof Error ? error.message : "No se pudo guardar. Probá de nuevo." });
@@ -147,6 +170,13 @@ export default function ChallengeTab({ currencySymbol }: ChallengeTabProps) {
   };
 
   const challengeMonths = getChallengeMonths();
+  const [currentYear, currentMonth] = getParaguayMonthString().split("-").map(Number);
+  const planStartDate = new Date(`${previewStartMonth}-01T00:00:00Z`);
+  const currentDate = new Date(Date.UTC(currentYear, currentMonth - 1, 1));
+  const currentPlanMonth = Math.min(12, Math.max(1,
+    (currentDate.getUTCFullYear() - planStartDate.getUTCFullYear()) * 12
+      + currentDate.getUTCMonth() - planStartDate.getUTCMonth() + 1,
+  ));
   const totalSavedSoFar = challengeMonths
     .filter((m) => m.isCompleted)
     .reduce((acc, m) => acc + m.amount, 0);
@@ -166,15 +196,10 @@ export default function ChallengeTab({ currencySymbol }: ChallengeTabProps) {
   };
 
   if (loading) {
-    return (
-      <div className="flex min-h-56 items-center justify-center text-slate-500" role="status" aria-live="polite">
-        <div className="h-7 w-7 animate-spin rounded-full border-2 border-orange-500 border-t-transparent" aria-hidden="true" />
-        <span className="sr-only">Cargando reto de ahorro</span>
-      </div>
-    );
+    return <SectionSkeleton label="Cargando reto de ahorro" />;
   }
 
-  if (loadError) {
+  if (loadError && !hasLoadedOnce.current) {
     return (
       <div className="mx-auto max-w-lg rounded-2xl border border-rose-200 bg-rose-50 p-5 text-center text-rose-900" role="alert">
         <CircleAlert className="mx-auto mb-2 h-6 w-6" aria-hidden="true" />
@@ -186,6 +211,12 @@ export default function ChallengeTab({ currencySymbol }: ChallengeTabProps) {
 
   return (
       <div className="space-y-4 pb-8 sm:space-y-6 sm:pb-12">
+      {loadError && hasLoadedOnce.current && (
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="status">
+          <span>No se pudieron actualizar los datos. Se muestra la última información cargada.</span>
+          <button type="button" onClick={() => void fetchChallenge(false, true)} className="min-h-10 shrink-0 rounded-xl bg-white px-3 font-bold text-amber-800 shadow-sm">Reintentar</button>
+        </div>
+      )}
       {notice && (
         <div className={`flex items-start gap-2 rounded-2xl border p-3 text-sm font-semibold ${notice.type === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-rose-200 bg-rose-50 text-rose-800"}`} role="status" aria-live="polite">
           {notice.type === "success" ? <Check className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" /> : <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />}
@@ -424,14 +455,16 @@ export default function ChallengeTab({ currencySymbol }: ChallengeTabProps) {
         </div>
 
         {/* 12 Months Cards Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
           {challengeMonths.map((m) => (
             <div
               key={m.index}
-              className={`rounded-2xl border p-4 flex flex-col justify-between transition-all ${
+              className={`${m.index !== currentPlanMonth && !showAllMonths ? "hidden sm:flex" : "flex"} rounded-2xl border p-4 flex-col justify-between transition-all ${
                 m.isCompleted
                   ? "border-emerald-200 bg-emerald-50/40 shadow-sm"
-                  : "border-slate-100 bg-slate-50/50 hover:border-slate-200 shadow-sm"
+                  : m.index === currentPlanMonth
+                    ? "border-blue-200 bg-blue-50/50 shadow-sm"
+                    : "border-slate-100 bg-slate-50/50 hover:border-slate-200 shadow-sm"
               }`}
             >
               <div>
@@ -538,6 +571,17 @@ export default function ChallengeTab({ currencySymbol }: ChallengeTabProps) {
               )}
             </div>
           ))}
+        </div>
+        <div className="mt-4 flex justify-center sm:hidden">
+          <button
+            type="button"
+            onClick={() => setShowAllMonths((shown) => !shown)}
+            aria-expanded={showAllMonths}
+            className="inline-flex min-h-11 items-center gap-2 rounded-full border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm transition active:scale-[0.98]"
+          >
+            {showAllMonths ? "Mostrar solo el mes actual" : `Ver ${challengeMonths.length - 1} meses restantes`}
+            {showAllMonths ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </button>
         </div>
       </div>
     </div>
