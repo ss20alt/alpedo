@@ -952,10 +952,10 @@ export default function Home() {
             className="flex flex-col items-center justify-center gap-1 h-full transition active:scale-90 text-[#1656DB] group"
             aria-label="Cargar Movimiento"
           >
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-[#104BC9] via-[#1656DB] to-[#1C5FE6] text-white font-black shadow-md shadow-blue-500/25 group-active:scale-95 transition-transform">
-              <Plus className="h-5 w-5 stroke-[3]" />
+            <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[#1656DB] text-white shadow-sm shadow-blue-500/15 group-active:scale-95 transition-transform">
+              <Plus className="h-5 w-5 stroke-[2.5]" />
             </div>
-            <span className="text-[10px] font-black text-[#1656DB] tracking-tight">Cargar</span>
+            <span className="text-[10px] font-semibold text-[#1656DB] tracking-tight">Cargar</span>
           </button>
 
           {/* 4. Más (Herramientas Sheet) */}
