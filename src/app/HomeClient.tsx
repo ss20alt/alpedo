@@ -670,7 +670,7 @@ export default function Home() {
                   onClick={() => setCurrentTab("grouped")}
                   onPointerEnter={() => prefetchSectionModule("grouped")}
                   onFocus={() => prefetchSectionModule("grouped")}
-                  className={`${navTabClass("grouped")} hidden md:flex`}
+                  className={navTabClass("grouped")}
                 >
                   Comercios
                 </button>
@@ -688,7 +688,7 @@ export default function Home() {
                   data-tab="challenge"
                   aria-current={currentTab === "challenge" ? "page" : undefined}
                   onClick={() => setCurrentTab("challenge")}
-                  className={`${navTabClass("challenge")} hidden md:flex`}
+                  className={navTabClass("challenge")}
                   onPointerEnter={() => prefetchSectionModule("challenge")}
                   onFocus={() => prefetchSectionModule("challenge")}
                 >
@@ -698,7 +698,7 @@ export default function Home() {
                   data-tab="streaks"
                   aria-current={currentTab === "streaks" ? "page" : undefined}
                   onClick={() => setCurrentTab("streaks")}
-                  className={`${navTabClass("streaks")} hidden md:flex`}
+                  className={navTabClass("streaks")}
                   onPointerEnter={() => prefetchSectionModule("streaks")}
                   onFocus={() => prefetchSectionModule("streaks")}
                 >
@@ -710,7 +710,7 @@ export default function Home() {
                   onClick={() => setCurrentTab("loans")}
                   onPointerEnter={() => prefetchSectionModule("loans")}
                   onFocus={() => prefetchSectionModule("loans")}
-                  className={`${navTabClass("loans")} hidden md:flex`}
+                  className={navTabClass("loans")}
                 >
                   Préstamos
                 </button>
