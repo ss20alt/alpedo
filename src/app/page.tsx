@@ -28,6 +28,7 @@ import type { TransactionPreset } from "@/components/TransactionModal";
 import CopilotDashboard from "@/components/CopilotDashboard";
 import type { TourStep } from "@/components/InteractiveTour";
 import { triggerHaptic } from "@/lib/haptics";
+import { trapDialogTab } from "@/lib/dialog-keyboard";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { formatParaguayMonthLabel, getParaguayMonthString } from "@/lib/date-utils";
 
@@ -107,23 +108,52 @@ export default function Home() {
   const [initialPreset, setInitialPreset] = useState<TransactionPreset | null>(null);
   const [isCueroOpen, setIsCueroOpen] = useState<boolean>(false);
   const [isToolsSheetOpen, setIsToolsSheetOpen] = useState<boolean>(false);
+  const [isToolsSheetMounted, setIsToolsSheetMounted] = useState<boolean>(false);
   const toolsTriggerRef = React.useRef<HTMLButtonElement>(null);
   const toolsCloseRef = React.useRef<HTMLButtonElement>(null);
+  const toolsSheetCloseTimerRef = React.useRef<number | null>(null);
   const [isTourOpen, setIsTourOpen] = useState<boolean>(false);
   const [privacyMode, setPrivacyMode] = useState<boolean>(false);
+  const openToolsSheet = useCallback(() => {
+    if (toolsSheetCloseTimerRef.current !== null) {
+      window.clearTimeout(toolsSheetCloseTimerRef.current);
+      toolsSheetCloseTimerRef.current = null;
+    }
+    setIsToolsSheetMounted(true);
+    window.requestAnimationFrame(() => setIsToolsSheetOpen(true));
+  }, []);
+  const closeToolsSheet = useCallback((afterClose?: () => void) => {
+    setIsToolsSheetOpen(false);
+    if (toolsSheetCloseTimerRef.current !== null) {
+      window.clearTimeout(toolsSheetCloseTimerRef.current);
+    }
+    toolsSheetCloseTimerRef.current = window.setTimeout(() => {
+      setIsToolsSheetMounted(false);
+      toolsSheetCloseTimerRef.current = null;
+      afterClose?.();
+    }, 220);
+  }, []);
   useEffect(() => {
     if (!isToolsSheetOpen) return;
     const trigger = toolsTriggerRef.current;
     toolsCloseRef.current?.focus();
-    const onEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setIsToolsSheetOpen(false);
-    };
-    window.addEventListener("keydown", onEscape);
     return () => {
-      window.removeEventListener("keydown", onEscape);
       trigger?.focus();
     };
   }, [isToolsSheetOpen]);
+  useEffect(() => {
+    if (!isToolsSheetOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isToolsSheetOpen]);
+  useEffect(() => () => {
+    if (toolsSheetCloseTimerRef.current !== null) {
+      window.clearTimeout(toolsSheetCloseTimerRef.current);
+    }
+  }, []);
   const setCurrentTab = (tab: TourStep["targetTab"]) => {
     if (tab !== "transactions" && tab !== "grouped") {
       setSelectedMonth((month) => month === "all" ? getParaguayMonthString() : month);
@@ -131,7 +161,7 @@ export default function Home() {
     setCurrentTabState(tab);
   };
   const navTabClass = (tab: TourStep["targetTab"]) =>
-    `min-h-10 shrink-0 rounded-full border px-2.5 py-1.5 text-xs font-bold transition-[background-color,border-color,box-shadow,color,transform] duration-200 ease-out active:scale-[0.97] sm:px-4 ${
+    `min-h-10 shrink-0 rounded-full border px-[5px] py-1.5 text-[11px] font-bold tracking-[-0.01em] transition-[background-color,border-color,box-shadow,color,transform] duration-200 ease-out active:scale-[0.97] motion-reduce:transition-none sm:px-4 sm:text-xs sm:tracking-normal ${
       currentTab === tab
         ? "border-white/40 bg-white/15 text-white shadow-[0_2px_8px_rgba(0,0,0,0.08)]"
         : "border-transparent text-white/80 hover:border-white/10 hover:bg-white/10 hover:text-white"
@@ -211,7 +241,8 @@ export default function Home() {
     const activeBtn = tabs?.querySelector<HTMLElement>(`[data-tab="${currentTab}"]`);
     if (!tabs || !activeBtn) return;
 
-    const targetLeft = activeBtn.offsetLeft + activeBtn.offsetWidth / 2 - tabs.clientWidth / 2;
+    const maxScroll = tabs.scrollWidth - tabs.clientWidth;
+    const targetLeft = Math.max(0, Math.min(activeBtn.offsetLeft - 8, maxScroll));
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     tabs.scrollTo({ left: targetLeft, behavior: reducedMotion ? "instant" : "smooth" });
   }, [currentTab, isTourOpen]);
@@ -503,15 +534,15 @@ export default function Home() {
   return (
     <div className="app-viewport bg-[#EEF2F8] text-slate-900 flex flex-col font-sans selection:bg-blue-600 selection:text-white">
       {/* Alpedo app header */}
-      <header className="sticky top-0 z-30 bg-gradient-to-b from-[#1252c8] via-[#165bd2] to-[#1b61d7] text-white pt-safe shadow-[0_2px_10px_rgba(15,23,42,0.10)] pb-1.5 sm:pb-2.5">
-        <div className="mx-auto flex max-w-lg sm:max-w-2xl md:max-w-4xl items-center justify-between px-3 sm:px-6 pt-0.5 pb-0.5 sm:pt-1.5 sm:pb-2">
+      <header className="sticky top-0 z-30 bg-gradient-to-b from-[#1252c8] via-[#165bd2] to-[#1b61d7] text-white pt-safe shadow-[0_2px_10px_rgba(15,23,42,0.10)] pb-1 sm:pb-2.5">
+        <div className="relative mx-auto flex max-w-none sm:max-w-2xl md:max-w-4xl items-center justify-between px-2 sm:px-6 pt-0 pb-0 sm:pt-1.5 sm:pb-2">
           {/* Left: User Avatar & Settings Trigger */}
           <button
             onClick={() => {
               triggerHaptic("selection");
               setCurrentTab("settings");
             }}
-          className="flex min-h-11 items-center gap-1.5 px-2 py-1 rounded-full text-white/90 hover:text-white hover:bg-white/10 active:scale-95 transition"
+          className="flex min-h-10 items-center gap-1.5 px-1.5 py-1 rounded-full text-white/90 transition active:scale-95 motion-reduce:transition-none hover:text-white hover:bg-white/10"
             title="Mi Perfil & Ajustes"
             aria-label="Ajustes"
           >
@@ -527,30 +558,18 @@ export default function Home() {
           <button
             type="button"
             id="tour-header-logo"
-            className="flex flex-col items-center cursor-pointer select-none rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/90 focus-visible:ring-offset-2 focus-visible:ring-offset-blue-600"
+            className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center cursor-pointer select-none rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/90 focus-visible:ring-offset-2 focus-visible:ring-offset-blue-600"
             onClick={() => setCurrentTab("dashboard")}
             aria-label="Ir al tablero"
           >
-            <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white flex items-center gap-1.5">
+            <h1 className="text-lg sm:text-2xl font-black tracking-tight text-white flex items-center gap-1.5">
               <span>alpedo</span>
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 inline-block" />
             </h1>
           </button>
 
-          {/* Help, privacy and the Kape spending check */}
-        <div className="flex items-center gap-1">
-            <button
-              onClick={() => {
-                triggerHaptic("selection");
-                setIsTourOpen(true);
-              }}
-              className="flex h-11 w-11 items-center justify-center rounded-full text-white/85 hover:text-white hover:bg-white/10 active:scale-95 transition"
-              title="Ayuda de la app"
-              aria-label="Ayuda"
-            >
-              <HelpCircle className="h-5 w-5" />
-            </button>
-
+          {/* Privacy and Kape controls */}
+          <div className="flex items-center gap-1">
             <button
               id="tour-privacy-btn"
               onClick={() => {
@@ -559,9 +578,9 @@ export default function Home() {
                 setPrivacyMode(next);
                 if (typeof window !== "undefined") {
                   if (currentUser?.id) localStorage.setItem(`alpedo_privacy_mode_${currentUser.id}`, next ? "true" : "false");
-                }
+        }
               }}
-              className={`flex h-11 w-11 items-center justify-center rounded-full transition active:scale-95 ${
+              className={`flex h-10 w-10 items-center justify-center rounded-full transition active:scale-95 motion-reduce:transition-none ${
                 privacyMode
                   ? "bg-amber-400/25 text-amber-300 ring-1 ring-amber-400/50 shadow-sm"
                   : "text-white/85 hover:text-white hover:bg-white/10"
@@ -575,7 +594,7 @@ export default function Home() {
             <button
               id="tour-cuero-header-button"
               onClick={() => setIsCueroOpen(true)}
-              className="relative flex h-11 w-11 items-center justify-center rounded-full text-white/90 hover:text-white hover:bg-white/10 active:scale-95 transition"
+              className="relative flex h-10 w-10 items-center justify-center rounded-full text-white/90 transition active:scale-95 motion-reduce:transition-none hover:text-white hover:bg-white/10"
               title="Preguntale al Kape: ¿Me da el cuero?"
               aria-label="Asistente Kape"
             >
@@ -586,14 +605,14 @@ export default function Home() {
         </div>
 
         {/* Main sections and month selector */}
-        <div className="mx-auto max-w-lg sm:max-w-2xl md:max-w-4xl px-3 sm:px-6 pt-0 sm:pt-0.5">
-          <div className="flex items-center gap-1.5 py-0.5 sm:gap-2 sm:py-1">
+        <div className="mx-auto max-w-none sm:max-w-2xl md:max-w-4xl px-2 sm:px-6 pt-0 sm:pt-0.5">
+          <div className="flex items-center gap-1 py-0 sm:gap-2 sm:py-1">
             {/* Horizontal pill navigation */}
             <nav aria-label="Secciones principales" className="relative min-w-0 flex-1">
               <div
                 ref={tabsContainerRef}
                 onScroll={updateTabScrollEdges}
-                className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto overscroll-x-contain no-scrollbar scroll-smooth py-0.5 pr-5"
+                className="flex items-center gap-0 sm:gap-1.5 overflow-x-auto overscroll-x-contain no-scrollbar scroll-smooth motion-reduce:scroll-auto py-0.5 pr-3"
               >
                 <button
                   data-tab="dashboard"
@@ -653,15 +672,15 @@ export default function Home() {
                 </button>
               </div>
               {tabScrollEdges.left && (
-                <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-0 flex w-5 items-center justify-start bg-gradient-to-r from-[#1C5FE6] to-transparent lg:hidden">
-                  <span className="flex h-4 w-4 items-center justify-center rounded-full bg-white/15">
+                <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-0 flex w-4 items-center justify-start bg-gradient-to-r from-[#1C5FE6] to-transparent lg:hidden">
+                  <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-white/15">
                     <ChevronLeft className="h-3 w-3 text-white/90" />
                   </span>
                 </div>
               )}
               {tabScrollEdges.right && (
-                <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-0 flex w-5 items-center justify-end bg-gradient-to-l from-[#1C5FE6] to-transparent lg:hidden">
-                  <span className="flex h-4 w-4 items-center justify-center rounded-full bg-white/15">
+                <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-0 flex w-4 items-center justify-end bg-gradient-to-l from-[#1C5FE6] to-transparent lg:hidden">
+                  <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-white/15">
                     <ChevronRight className="h-3 w-3 text-white/90" />
                   </span>
                 </div>
@@ -679,7 +698,7 @@ export default function Home() {
                 }}
                 aria-label="Mes de movimientos"
                 title="Elegir mes"
-                className="h-10 w-[5.5rem] appearance-none rounded-full border border-white/30 bg-white/10 pl-7 pr-1.5 text-[11px] font-bold text-white shadow-sm shadow-blue-950/10 transition-[background-color,border-color,box-shadow,transform] duration-200 ease-out hover:border-white/45 hover:bg-white/20 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 cursor-pointer"
+                className="h-10 w-[5.25rem] appearance-none rounded-full border border-white/30 bg-white/10 pl-6 pr-1.5 text-[11px] font-bold text-white shadow-sm shadow-blue-950/10 transition-[background-color,border-color,box-shadow,transform] duration-200 ease-out motion-reduce:transition-none hover:border-white/45 hover:bg-white/20 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 cursor-pointer"
               >
                 <option value={currentMonth} className="text-slate-900 bg-white">
                   {formatParaguayMonthLabel(currentMonth)}
@@ -693,7 +712,7 @@ export default function Home() {
                   ))}
                 <option value="all" className="text-slate-900 bg-white">Todos</option>
               </select>
-              <Calendar aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/85" />
+              <Calendar aria-hidden="true" className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/85" />
             </div>
           </div>
         </div>
@@ -944,7 +963,7 @@ export default function Home() {
             ref={toolsTriggerRef}
             onClick={() => {
               triggerHaptic("selection");
-              setIsToolsSheetOpen(true);
+              openToolsSheet();
             }}
             className={`flex flex-col items-center justify-center gap-1 h-full transition active:scale-90 ${
               currentTab === "loans" || currentTab === "settings" || currentTab === "grouped"
@@ -980,120 +999,147 @@ export default function Home() {
       </div>
 
       {/* Mobile tools sheet */}
-      {isToolsSheetOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/60 backdrop-blur-sm md:hidden animate-in fade-in duration-200">
+      {isToolsSheetMounted && (
+        <div
+          aria-hidden={!isToolsSheetOpen}
+          className={`fixed inset-0 z-50 flex items-end justify-center md:hidden transition-colors duration-200 motion-reduce:transition-none ${isToolsSheetOpen ? "" : "pointer-events-none"}`}
+        >
           <div
-            className="fixed inset-0"
-            onClick={() => setIsToolsSheetOpen(false)}
+            className={`absolute inset-0 bg-slate-950/40 transition-opacity duration-200 motion-reduce:transition-none ${isToolsSheetOpen ? "opacity-100" : "opacity-0"}`}
+            onClick={() => closeToolsSheet()}
           />
-          <div role="dialog" aria-modal="true" aria-labelledby="mobile-tools-title" className="relative w-full max-h-[90dvh] overflow-y-auto touch-scroll rounded-t-3xl border-t border-slate-200 bg-white p-5 shadow-2xl z-10 pb-safe animate-in slide-in-from-bottom duration-250 text-slate-900">
-            <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-slate-300" />
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
-              <div>
-                <h3 id="mobile-tools-title" className="text-base font-black text-slate-900">Herramientas & Secciones</h3>
-                <p className="text-xs text-slate-400">Funciones complementarias</p>
+          <div
+            role="dialog"
+            aria-modal={isToolsSheetOpen}
+            aria-labelledby="mobile-tools-title"
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.preventDefault();
+                closeToolsSheet();
+              } else {
+                trapDialogTab(event);
+              }
+            }}
+            className={`relative z-10 w-full max-w-lg max-h-[86dvh] overflow-hidden rounded-t-[28px] border border-white/80 bg-[#F7F9FC] text-slate-900 shadow-[0_-12px_48px_rgba(15,23,42,0.18)] pb-[calc(env(safe-area-inset-bottom)+0.75rem)] transition-transform duration-[260ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${isToolsSheetOpen ? "translate-y-0" : "translate-y-full"}`}
+          >
+            <div className="max-h-[86dvh] overflow-y-auto overscroll-contain touch-pan-y px-4 pb-2 pt-2 sm:px-5">
+              <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-slate-300/90" />
+              <div className="mb-3 flex items-center justify-between border-b border-slate-200/75 pb-3">
+                <div className="min-w-0 pr-3">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-blue-600">Alpedo · Accesos</p>
+                  <h3 id="mobile-tools-title" className="mt-0.5 text-lg font-extrabold tracking-tight text-slate-900">Más herramientas</h3>
+                  <p className="mt-0.5 text-xs text-slate-500">Otras funciones de tu cuenta</p>
+                </div>
+                <button
+                  ref={toolsCloseRef}
+                  onClick={() => closeToolsSheet()}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200/80 bg-white text-slate-500 shadow-sm transition-colors active:scale-95 motion-reduce:transition-none hover:bg-slate-50 hover:text-slate-800"
+                  aria-label="Cerrar"
+                >
+                  <X className="h-4 w-4" />
+                </button>
               </div>
-              <button
-                ref={toolsCloseRef}
-                onClick={() => setIsToolsSheetOpen(false)}
-                className="flex h-11 w-11 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition active:scale-95"
-                aria-label="Cerrar"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
 
-            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
               <button
                 onClick={() => {
                   triggerHaptic("selection");
-                  setIsToolsSheetOpen(false);
-                  setIsTourOpen(true);
+                  closeToolsSheet(() => setIsTourOpen(true));
                 }}
-                className="flex items-center gap-3 p-3.5 rounded-2xl border border-blue-200 bg-blue-50/70 text-blue-900 hover:bg-blue-100 transition active:scale-95 col-span-2"
+                className="group flex min-h-[68px] w-full items-center gap-3 rounded-2xl border border-blue-200/80 bg-gradient-to-r from-blue-50 to-white px-3 py-2.5 text-left shadow-[0_2px_12px_rgba(37,99,235,0.06)] transition-[background-color,border-color,box-shadow,transform] duration-200 active:scale-[0.99] motion-reduce:transition-none hover:border-blue-300 hover:shadow-[0_4px_16px_rgba(37,99,235,0.10)]"
               >
-                <div className="h-10 w-10 rounded-xl bg-blue-500/15 text-[#1656DB] flex items-center justify-center shrink-0">
-                  <HelpCircle className="h-5 w-5" />
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] bg-blue-100 text-[#1656DB] transition-transform duration-200 group-active:scale-95 motion-reduce:transition-none">
+                  <HelpCircle className="h-[18px] w-[18px]" />
                 </div>
-                <div>
-                  <div className="text-xs font-black text-slate-900">Guía de la app</div>
-                  <div className="text-[10px] text-slate-500">Un repaso breve de las secciones</div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-bold text-slate-900">Guía de la app</div>
+                  <div className="mt-0.5 text-xs text-slate-500">Un repaso breve de las secciones</div>
                 </div>
+                <ChevronRight className="h-4 w-4 shrink-0 text-blue-500 transition-transform duration-200 group-hover:translate-x-0.5 motion-reduce:transition-none" />
               </button>
 
               <button
                 onClick={() => {
                   setCurrentTab("loans");
-                  setIsToolsSheetOpen(false);
+                  closeToolsSheet();
                 }}
-                className={`flex items-center gap-3 p-3.5 rounded-2xl border text-left transition active:scale-95 ${
+                aria-current={currentTab === "loans" ? "page" : undefined}
+                className={`group flex min-h-[60px] w-full items-center gap-3 rounded-2xl border px-3 py-2 text-left transition-[background-color,border-color,box-shadow,transform] duration-200 active:scale-[0.99] motion-reduce:transition-none ${
                   currentTab === "loans"
-                    ? "bg-blue-50 border-blue-500 text-blue-700"
-                    : "bg-slate-50/80 border-slate-200/80 text-slate-800 hover:bg-slate-100"
+                    ? "border-blue-200 bg-blue-50/80 text-blue-700"
+                    : "border-slate-200/80 bg-white text-slate-800 hover:border-slate-300 hover:bg-slate-50"
                 }`}
               >
-                <div className="h-10 w-10 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center shrink-0">
-                  <Calculator className="h-5 w-5" />
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                  <Calculator className="h-[18px] w-[18px]" />
                 </div>
-                <div>
-                  <div className="text-xs font-bold text-slate-900">Préstamos</div>
-                  <div className="text-[10px] text-slate-500">Cuotas e impacto</div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[13px] font-bold text-slate-900">Préstamos</div>
+                  <div className="mt-0.5 text-[11px] text-slate-500">Cuotas e impacto</div>
                 </div>
+                <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
               </button>
 
               <button
                 onClick={() => {
                   setCurrentTab("grouped");
-                  setIsToolsSheetOpen(false);
+                  closeToolsSheet();
                 }}
-                className={`flex items-center gap-3 p-3.5 rounded-2xl border text-left transition active:scale-95 ${
+                aria-current={currentTab === "grouped" ? "page" : undefined}
+                className={`group flex min-h-[60px] w-full items-center gap-3 rounded-2xl border px-3 py-2 text-left transition-[background-color,border-color,box-shadow,transform] duration-200 active:scale-[0.99] motion-reduce:transition-none ${
                   currentTab === "grouped"
-                    ? "bg-cyan-50 border-cyan-500 text-cyan-700"
-                    : "bg-slate-50/80 border-slate-200/80 text-slate-800 hover:bg-slate-100"
+                    ? "border-cyan-200 bg-cyan-50/80 text-cyan-700"
+                    : "border-slate-200/80 bg-white text-slate-800 hover:border-slate-300 hover:bg-slate-50"
                 }`}
               >
-                <div className="h-10 w-10 rounded-xl bg-cyan-500/10 text-cyan-600 flex items-center justify-center shrink-0">
-                  <Layers className="h-5 w-5" />
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-cyan-50 text-cyan-600">
+                  <Layers className="h-[18px] w-[18px]" />
                 </div>
-                <div>
-                  <div className="text-xs font-bold text-slate-900">Por Comercio</div>
-                  <div className="text-[10px] text-slate-500">Bolt, Biggie, Super</div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[13px] font-bold text-slate-900">Por Comercio</div>
+                  <div className="mt-0.5 text-[11px] text-slate-500">Bolt, Biggie, Super</div>
                 </div>
+                <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
               </button>
 
               <button
                 onClick={() => {
                   setCurrentTab("settings");
-                  setIsToolsSheetOpen(false);
+                  closeToolsSheet();
                 }}
-                className={`flex items-center gap-3 p-3.5 rounded-2xl border text-left transition active:scale-95 ${
+                aria-current={currentTab === "settings" ? "page" : undefined}
+                className={`group flex min-h-[60px] w-full items-center gap-3 rounded-2xl border px-3 py-2 text-left transition-[background-color,border-color,box-shadow,transform] duration-200 active:scale-[0.99] motion-reduce:transition-none ${
                   currentTab === "settings"
-                    ? "bg-blue-50 border-blue-500 text-blue-700"
-                    : "bg-slate-50/80 border-slate-200/80 text-slate-800 hover:bg-slate-100"
+                    ? "border-slate-300 bg-slate-100 text-slate-800"
+                    : "border-slate-200/80 bg-white text-slate-800 hover:border-slate-300 hover:bg-slate-50"
                 }`}
               >
-                <div className="h-10 w-10 rounded-xl bg-slate-200 text-slate-700 flex items-center justify-center shrink-0">
-                  <Settings className="h-5 w-5" />
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
+                  <Settings className="h-[18px] w-[18px]" />
                 </div>
-                <div>
-                  <div className="text-xs font-bold text-slate-900">Ajustes & PIN</div>
-                  <div className="text-[10px] text-slate-500">Moneda, respaldo, clave</div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[13px] font-bold text-slate-900">Ajustes & PIN</div>
+                  <div className="mt-0.5 text-[11px] text-slate-500">Moneda, respaldo, clave</div>
                 </div>
+                <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
               </button>
 
               {!privacyMode && <a
                 href="/api/transactions/export"
                 download
-                className="flex items-center gap-3 p-3.5 rounded-2xl border border-slate-200/80 bg-slate-50/80 text-slate-800 hover:bg-slate-100 transition active:scale-95"
+                onClick={() => closeToolsSheet()}
+                className="group flex min-h-[60px] w-full items-center gap-3 rounded-2xl border border-slate-200/80 bg-white px-3 py-2 text-left text-slate-800 transition-[background-color,border-color,transform] duration-200 active:scale-[0.99] motion-reduce:transition-none hover:border-slate-300 hover:bg-slate-50"
               >
-                <div className="h-10 w-10 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center shrink-0">
-                  <FileSpreadsheet className="h-5 w-5" />
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+                  <FileSpreadsheet className="h-[18px] w-[18px]" />
                 </div>
-                <div>
-                  <div className="text-xs font-bold text-slate-900">Exportar movimientos</div>
-                  <div className="text-[10px] text-slate-500">CSV compatible con Excel</div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[13px] font-bold text-slate-900">Exportar movimientos</div>
+                  <div className="mt-0.5 text-[11px] text-slate-500">CSV compatible con Excel</div>
                 </div>
+                <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
               </a>}
+              </div>
             </div>
           </div>
         </div>

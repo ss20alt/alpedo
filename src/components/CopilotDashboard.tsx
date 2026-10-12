@@ -552,7 +552,7 @@ export default function CopilotDashboard({
   return (
       <div className="space-y-4 pb-8 sm:space-y-5">
       {/* 1. COPILOT HERO CARD: "₲ 287.000 restante de ₲ 1.095.000 presupuestado este mes" (Reference Image 1) */}
-      <div id="tour-hero-card" className="relative rounded-[26px] sm:rounded-[32px] bg-white p-4 sm:p-6 shadow-[0_8px_30px_rgb(0,0,0,0.06)] border border-slate-100/90 overflow-hidden">
+      <div id="tour-hero-card" className="app-mobile-surface relative rounded-[26px] sm:rounded-[32px] bg-white p-4 sm:p-6 shadow-[0_8px_30px_rgb(0,0,0,0.06)] border border-slate-100/90 overflow-hidden">
 
         {/* Top Info Header */}
         <div className="flex items-start justify-between">
@@ -747,7 +747,7 @@ export default function CopilotDashboard({
       </div>
 
       {/* 1.25 SPENDING PACE GAUGE & QUICK SHARING (Copilot & YNAB Benchmark) */}
-      <div id="tour-spending-pace" className="rounded-[28px] bg-white p-4 sm:p-5 shadow-[0_4px_24px_rgba(0,0,0,0.04)] border border-slate-100">
+      <div id="tour-spending-pace" className="app-mobile-surface rounded-[28px] bg-white p-4 sm:p-5 shadow-[0_4px_24px_rgba(0,0,0,0.04)] border border-slate-100">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <div className={`h-8 w-8 rounded-xl flex items-center justify-center text-sm font-bold ${
@@ -982,7 +982,7 @@ export default function CopilotDashboard({
           </div>
         </div>
 
-        <div className="rounded-[24px] bg-white p-4 sm:p-5 shadow-[0_2px_16px_rgba(0,0,0,0.04)] border border-slate-100">
+        <div className="app-mobile-surface rounded-[24px] bg-white p-4 sm:p-5 shadow-[0_2px_16px_rgba(0,0,0,0.04)] border border-slate-100">
           <p className="text-center text-[11px] font-bold text-slate-400 mb-3 tracking-tight">
             Hoy hasta ahora
           </p>
@@ -1269,7 +1269,7 @@ export default function CopilotDashboard({
       </div>
 
       {/* 4. COPILOT "MONTHLY SPENDING" BAR CHART & METRICS (Reference Image 2) */}
-      <div className="rounded-[28px] bg-white p-5 sm:p-6 shadow-[0_4px_24px_rgba(0,0,0,0.04)] border border-slate-100">
+      <div className="app-mobile-surface rounded-[28px] bg-white p-5 sm:p-6 shadow-[0_4px_24px_rgba(0,0,0,0.04)] border border-slate-100">
         <div className="text-center">
           <p className="text-[11px] font-extrabold tracking-wider text-slate-400 uppercase">
             GASTO MENSUAL
@@ -1486,7 +1486,7 @@ export default function CopilotDashboard({
           </button>
         </div>
 
-        <div className="rounded-[28px] bg-white p-5 shadow-[0_4px_24px_rgba(0,0,0,0.04)] border border-slate-100">
+        <div className="app-mobile-surface rounded-[28px] bg-white p-5 shadow-[0_4px_24px_rgba(0,0,0,0.04)] border border-slate-100">
           <div className="text-center">
             <p className="text-[11px] font-bold text-slate-400">Saldo de cuenta declarado</p>
             <div className="text-3xl font-black text-slate-900 tracking-tight mt-0.5">
@@ -1627,32 +1627,36 @@ export default function CopilotDashboard({
         )}
       </div>
 
-      {/* 7. KAPE COPILOT AI ASSISTANT CARD ("¿Me da el cuero?") */}
-      <div id="tour-cuero-card" className="rounded-[28px] bg-[#174B9C] p-5 text-white shadow-md relative overflow-hidden">
-        <div className="relative z-10 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 backdrop-blur-md text-2xl shadow-inner shrink-0">
-              <FinanceIcon name="brand" className="h-6 w-6 text-white" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h4 className="text-sm font-black text-white">¿Me da el cuero?</h4>
-                <span className="rounded-full bg-emerald-400 px-2 py-0.5 text-[9px] font-black text-slate-950">
-                  CONSEJO KAPE
-                </span>
-              </div>
-              <p className="text-[11px] text-blue-200 mt-0.5">
-                Preguntale al Kape antes de quemar plata al pedo en la calle.
-              </p>
-            </div>
+      {/* 7. AI purchase assistant */}
+      <div
+        id="tour-cuero-card"
+        className="relative isolate overflow-hidden rounded-[26px] border border-blue-300/20 bg-gradient-to-br from-[#0B5EAE] via-[#08549F] to-[#074B90] p-4 text-white shadow-[0_8px_24px_rgba(6,58,126,0.14)] sm:p-5"
+      >
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -right-10 -top-12 h-32 w-32 rounded-full bg-white/[0.045]"
+        />
+        <div className="relative z-10 flex items-center gap-3">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-2xl ring-1 ring-inset ring-white/10">
+            <FinanceIcon name="brand" className="h-6 w-6 text-white" />
           </div>
-
+          <div className="min-w-0 flex-1">
+            <h4 className="text-sm font-extrabold leading-tight text-white sm:text-[15px]">
+              ¿Me da el cuero?
+            </h4>
+            <p className="mt-1 text-xs leading-relaxed text-blue-100">
+              Revisá si una compra entra en tu presupuesto.
+            </p>
+          </div>
           <button
+            type="button"
             onClick={onOpenCuero}
-            className="rounded-full bg-white px-4 py-2 text-xs font-black text-blue-900 hover:bg-blue-50 active:scale-95 transition shadow-md shrink-0 flex items-center gap-1"
+            aria-label="Consultar con ¿Me da el cuero?"
+            title="Consultar con el asistente"
+            className="flex h-11 w-11 shrink-0 items-center justify-center gap-2 rounded-full bg-white text-xs font-bold text-blue-900 shadow-sm transition-[transform,background-color,box-shadow] duration-200 ease-out hover:bg-blue-50 hover:shadow-md active:scale-[0.97] min-[400px]:w-auto min-[400px]:px-3.5"
           >
-            <span>Preguntar</span>
-            <ArrowRight className="h-3 w-3" />
+            <span className="sr-only min-[400px]:not-sr-only">Consultar</span>
+            <ArrowRight aria-hidden="true" className="h-4 w-4" />
           </button>
         </div>
       </div>

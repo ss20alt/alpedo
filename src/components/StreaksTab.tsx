@@ -264,9 +264,9 @@ export default function StreaksTab() {
     <div className="mx-auto max-w-4xl space-y-4 pb-8 text-slate-900 sm:space-y-6 sm:pb-12">
       <section
         id="tour-streaks-card"
-        className="overflow-hidden rounded-[26px] border border-orange-200/80 bg-gradient-to-br from-orange-50 via-white to-amber-50 p-4 shadow-[0_4px_24px_rgba(249,115,22,0.06)] sm:rounded-[28px] sm:p-8"
+        className="app-mobile-surface overflow-hidden rounded-[26px] border border-orange-200/80 bg-gradient-to-br from-orange-50 via-white to-amber-50 p-4 shadow-[0_4px_24px_rgba(249,115,22,0.06)] sm:rounded-[28px] sm:p-8"
       >
-        <div className="inline-flex min-h-8 items-center gap-2 rounded-full border border-orange-200 bg-orange-100 px-3 text-[11px] font-extrabold text-orange-800">
+        <div className="app-mobile-kicker inline-flex min-h-8 items-center gap-2 rounded-full border border-orange-200 bg-orange-100 px-3 text-[11px] font-extrabold text-orange-800">
           <Flame className="h-3.5 w-3.5 text-orange-600" />
           Rachas y desafíos
         </div>
@@ -281,9 +281,9 @@ export default function StreaksTab() {
             </p>
           </div>
 
-          <div className="flex items-center justify-between gap-4 rounded-2xl border border-orange-200 bg-white px-4 py-3 shadow-sm sm:min-w-44 sm:flex-col sm:justify-center sm:px-6 sm:py-4">
+          <div className="app-mobile-subcard flex items-center justify-between gap-4 rounded-2xl border border-orange-200 bg-white px-4 py-3 shadow-sm sm:min-w-44 sm:flex-col sm:justify-center sm:px-6 sm:py-4">
             <div className="min-w-0">
-              <p className="text-[10px] font-black uppercase tracking-wider text-orange-700 sm:text-center">Tu racha actual</p>
+              <p className="text-[10px] font-black uppercase tracking-wider text-blue-700 sm:text-center">Tu racha actual</p>
               <p className="mt-0.5 text-[11px] font-medium leading-snug text-slate-500 sm:text-center">
                 {data.streakSource === "last_al_pedo"
                   ? "Días desde el último gasto Al Pedo"
@@ -295,33 +295,33 @@ export default function StreaksTab() {
             <div className="flex shrink-0 items-center gap-1.5">
               <Flame className={`h-6 w-6 ${data.myStreakDays > 0 ? "fill-orange-500 text-orange-500" : "text-slate-300"}`} />
               <span className="font-mono text-3xl font-black tabular-nums text-slate-900">{data.myStreakDays}</span>
-              <span className="text-xs font-bold text-orange-700">días</span>
+              <span className="text-xs font-bold text-blue-700">días</span>
             </div>
           </div>
         </div>
 
-        <div className="mt-4 grid gap-2 border-t border-orange-200/70 pt-4 sm:mt-6 sm:grid-cols-3 sm:gap-3 sm:pt-5">
-          <div className="rounded-2xl border border-orange-100 bg-white/85 p-2.5 sm:p-3">
-            <p className="flex items-center gap-2 text-[11px] font-extrabold text-orange-800 sm:text-xs">
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-orange-100 text-[11px]">1</span>
+        <div className="mt-4 grid gap-2 border-t border-slate-200/70 pt-4 sm:mt-6 sm:grid-cols-3 sm:gap-3 sm:pt-5">
+          <div className="app-mobile-subcard rounded-2xl border border-orange-100 bg-white/85 p-2.5 sm:p-3">
+            <p className="flex items-center gap-2 text-[11px] font-extrabold text-blue-700 sm:text-xs">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[11px]">1</span>
               El registro marca la racha
             </p>
             <p className="mt-1 pl-8 text-xs leading-relaxed text-slate-600">
               Un gasto Al Pedo reinicia tu contador.
             </p>
           </div>
-          <div className="rounded-2xl border border-orange-100 bg-white/85 p-2.5 sm:p-3">
-            <p className="flex items-center gap-2 text-[11px] font-extrabold text-amber-800 sm:text-xs">
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-100 text-[11px]">2</span>
+          <div className="app-mobile-subcard rounded-2xl border border-orange-100 bg-white/85 p-2.5 sm:p-3">
+            <p className="flex items-center gap-2 text-[11px] font-extrabold text-blue-700 sm:text-xs">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[11px]">2</span>
               Desafío entre amigos
             </p>
             <p className="mt-1 pl-8 text-xs leading-relaxed text-slate-600">
               Un código vincula las dos cuentas para comparar sus días de racha.
             </p>
           </div>
-          <div className="rounded-2xl border border-emerald-100 bg-white/85 p-2.5 sm:p-3">
-            <p className="flex items-center gap-2 text-[11px] font-extrabold text-emerald-800 sm:text-xs">
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[11px]">3</span>
+          <div className="app-mobile-subcard rounded-2xl border border-emerald-100 bg-white/85 p-2.5 sm:p-3">
+            <p className="flex items-center gap-2 text-[11px] font-extrabold text-blue-700 sm:text-xs">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[11px]">3</span>
               Privacidad
             </p>
             <p className="mt-1 pl-8 text-xs leading-relaxed text-slate-600">
@@ -332,7 +332,7 @@ export default function StreaksTab() {
       </section>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <section className="rounded-[24px] border border-slate-100 bg-white p-4 shadow-sm sm:rounded-[28px] sm:p-5">
+        <section className="app-mobile-surface rounded-[24px] border border-slate-100 bg-white p-4 shadow-sm sm:rounded-[28px] sm:p-5">
           <div className="flex items-center gap-2">
             <Share2 className="h-4 w-4 text-blue-600" />
             <h3 className="text-xs font-black uppercase tracking-wide text-slate-700">Tu código para invitar</h3>
@@ -358,9 +358,9 @@ export default function StreaksTab() {
           </p>
         </section>
 
-        <form onSubmit={handleAddFriend} className="rounded-[24px] border border-slate-100 bg-white p-4 shadow-sm sm:rounded-[28px] sm:p-5">
+        <form onSubmit={handleAddFriend} className="app-mobile-surface rounded-[24px] border border-slate-100 bg-white p-4 shadow-sm sm:rounded-[28px] sm:p-5">
           <div className="flex items-center gap-2">
-            <UserRoundPlus className="h-4 w-4 text-orange-600" />
+            <UserRoundPlus className="h-4 w-4 text-blue-600" />
             <h3 className="text-xs font-black uppercase tracking-wide text-slate-700">Sumar a un amigo</h3>
           </div>
 
@@ -388,7 +388,7 @@ export default function StreaksTab() {
           <button
             type="submit"
             disabled={isAdding}
-            className="mt-3 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-orange-600 px-4 text-sm font-extrabold text-white transition hover:bg-orange-700 active:scale-[0.98] disabled:cursor-wait disabled:opacity-65"
+            className="app-mobile-primary mt-3 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-orange-600 px-4 text-sm font-extrabold text-white transition hover:bg-orange-700 active:scale-[0.98] disabled:cursor-wait disabled:opacity-65"
           >
             {isAdding ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Swords className="h-4 w-4" />}
             {isAdding ? "Conectando…" : "Conectar duelo"}
@@ -405,10 +405,10 @@ export default function StreaksTab() {
         </p>
       )}
 
-      <section className="rounded-[24px] border border-slate-100 bg-white p-4 shadow-sm sm:rounded-[28px] sm:p-6">
+      <section className="app-mobile-surface rounded-[24px] border border-slate-100 bg-white p-4 shadow-sm sm:rounded-[28px] sm:p-6">
         <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
           <div className="flex min-w-0 items-center gap-2">
-            <Swords className="h-5 w-5 shrink-0 text-orange-500" />
+            <Swords className="h-5 w-5 shrink-0 text-blue-600" />
             <h3 className="text-sm font-black text-slate-900 sm:text-base">Mis duelos</h3>
             <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold tabular-nums text-slate-600">{friendCount}</span>
           </div>
@@ -417,7 +417,7 @@ export default function StreaksTab() {
 
         {friendCount === 0 ? (
           <div className="py-8 text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-50 text-orange-600">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
               <Swords className="h-5 w-5" />
             </div>
             <p className="mt-3 text-sm font-bold text-slate-800">Todavía no tenés duelos</p>
@@ -431,7 +431,7 @@ export default function StreaksTab() {
               <article key={friend.friend_code} className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3 sm:p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-100 text-orange-700">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-700">
                       <Swords className="h-5 w-5" />
                     </div>
                     <div className="min-w-0">
@@ -486,7 +486,7 @@ export default function StreaksTab() {
                   </div>
                   <div className="shrink-0 text-right">
                     {friend.connected && friend.streak_count !== null ? (
-                      <p className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-2.5 py-1 font-mono text-sm font-black tabular-nums text-orange-700">
+                      <p className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 font-mono text-sm font-black tabular-nums text-blue-700">
                         <Flame className="h-4 w-4 fill-orange-500 text-orange-500" />
                         {friend.streak_count} <span className="font-sans text-[10px]">días</span>
                       </p>
@@ -522,7 +522,7 @@ export default function StreaksTab() {
         )}
       </section>
 
-      <section className="rounded-[22px] border border-amber-200 bg-white p-4 shadow-sm sm:rounded-[24px] sm:p-5">
+      <section className="app-mobile-surface rounded-[22px] border border-amber-200 bg-white p-4 shadow-sm sm:rounded-[24px] sm:p-5">
         <div className="flex items-start gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
             <Trophy className="h-5 w-5" />
@@ -553,7 +553,7 @@ export default function StreaksTab() {
               className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-900 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
             />
           </div>
-          <button type="submit" disabled={isSavingLeaderboard || !leaderboardName.trim()} className="mt-2 inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-amber-600 px-4 text-xs font-extrabold text-white transition hover:bg-amber-700 disabled:cursor-wait disabled:opacity-60 active:scale-[0.98] sm:mt-0 sm:w-auto">
+          <button type="submit" disabled={isSavingLeaderboard || !leaderboardName.trim()} className="app-mobile-primary mt-2 inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-amber-600 px-4 text-xs font-extrabold text-white transition hover:bg-amber-700 disabled:cursor-wait disabled:opacity-60 active:scale-[0.98] sm:mt-0 sm:w-auto">
             {isSavingLeaderboard ? "Guardando…" : data.leaderboardEnabled ? "Actualizar apodo" : "Activar y publicar mi racha"}
           </button>
           {data.leaderboardEnabled && (

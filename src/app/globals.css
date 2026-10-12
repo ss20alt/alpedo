@@ -3,6 +3,10 @@
 :root {
   --background: #EEF2F8;
   --foreground: #0F172A;
+  --app-brand: #1656DB;
+  --app-surface: #FFFFFF;
+  --app-outline: #E4EAF2;
+  --app-shadow: 0 4px 20px rgba(15, 23, 42, 0.045);
 }
 
 .app-viewport {
@@ -89,6 +93,81 @@ input[type="number"] {
 .touch-scroll {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
+}
+
+/* Shared surfaces for the responsive app sections. Keep feature colors in
+   small icons and status labels; large panels follow one calm visual system. */
+@media (max-width: 767px) {
+.app-mobile-surface,
+.app-mobile-subcard,
+.app-mobile-kicker,
+.app-mobile-primary {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.app-mobile-surface {
+  border-color: var(--app-outline) !important;
+  border-radius: 24px !important;
+  background-color: var(--app-surface) !important;
+  background-image: none !important;
+  box-shadow: var(--app-shadow) !important;
+}
+
+.app-mobile-subcard {
+  border-color: var(--app-outline) !important;
+  border-radius: 18px !important;
+  background-color: #F8FAFC !important;
+  box-shadow: none !important;
+}
+
+.app-mobile-kicker {
+  border-color: #DBEAFE !important;
+  background-color: #EFF6FF !important;
+  color: #1D4ED8 !important;
+  box-shadow: none !important;
+}
+
+.app-mobile-primary {
+  border-color: transparent !important;
+  border-radius: 14px !important;
+  background-color: var(--app-brand) !important;
+  color: #FFFFFF !important;
+  box-shadow: 0 4px 12px rgba(22, 86, 219, 0.16) !important;
+  transition: background-color 180ms ease, box-shadow 180ms ease, transform 140ms ease !important;
+}
+
+.app-mobile-primary:hover:not(:disabled) {
+  background-color: #104BC9 !important;
+  box-shadow: 0 6px 16px rgba(22, 86, 219, 0.2) !important;
+}
+
+  .app-mobile-choice[aria-pressed="true"] {
+    border-color: var(--app-brand) !important;
+    background-color: var(--app-brand) !important;
+    color: #FFFFFF !important;
+    box-shadow: 0 3px 10px rgba(22, 86, 219, 0.16) !important;
+  }
+
+  main :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea),
+  [role="dialog"] :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+    border-color: var(--app-outline) !important;
+    border-radius: 14px !important;
+    background-color: #F8FAFC !important;
+    transition: border-color 180ms ease, background-color 180ms ease, box-shadow 180ms ease;
+  }
+
+  main :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea):focus,
+  [role="dialog"] :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea):focus {
+    border-color: var(--app-brand) !important;
+    background-color: #FFFFFF !important;
+    box-shadow: 0 0 0 3px rgba(22, 86, 219, 0.11) !important;
+  }
+
+  main button:not(:disabled),
+  [role="dialog"] button:not(:disabled) {
+    -webkit-tap-highlight-color: transparent;
+    transition-duration: 180ms;
+  }
 }
 
 /* Prevent mobile auto-zoom on form inputs */

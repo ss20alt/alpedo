@@ -226,7 +226,7 @@ export default function SettingsTab({
   return (
     <div id="tour-settings-card" className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
       {/* 0. Perfil de Usuario & Enlace para Compartir */}
-      <div className="rounded-[28px] border border-blue-100 bg-gradient-to-br from-white via-blue-50/20 to-white p-5 sm:p-6 shadow-[0_4px_24px_rgba(22,86,219,0.06)] text-slate-900 md:col-span-2">
+      <div className="app-mobile-surface rounded-[28px] border border-blue-100 bg-gradient-to-br from-white via-blue-50/20 to-white p-5 sm:p-6 shadow-[0_4px_24px_rgba(22,86,219,0.06)] text-slate-900 md:col-span-2">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#104BC9] to-[#2563EB] flex items-center justify-center text-white shadow-md shadow-blue-600/25 shrink-0 text-xl font-black">
@@ -287,7 +287,7 @@ export default function SettingsTab({
       </div>
 
       {/* 1. Moneda & Formato */}
-      <div className="rounded-[28px] border border-slate-100 bg-white p-4 sm:p-6 shadow-[0_4px_24px_rgba(0,0,0,0.03)] text-slate-900">
+      <div className="app-mobile-surface rounded-[28px] border border-slate-100 bg-white p-4 sm:p-6 shadow-[0_4px_24px_rgba(0,0,0,0.03)] text-slate-900">
         <h3 className="text-sm sm:text-base font-black text-slate-900 flex items-center gap-2 mb-1">
           <Settings className="h-4 w-4 sm:h-5 sm:w-5 text-[#1656DB] shrink-0" />
           <span>Formato de Moneda</span>
@@ -301,7 +301,7 @@ export default function SettingsTab({
       </div>
 
       {/* 2. PIN Maestro & Seguridad */}
-      <div className="rounded-[28px] border border-slate-100 bg-white p-4 sm:p-6 shadow-[0_4px_24px_rgba(0,0,0,0.03)] text-slate-900">
+      <div className="app-mobile-surface rounded-[28px] border border-slate-100 bg-white p-4 sm:p-6 shadow-[0_4px_24px_rgba(0,0,0,0.03)] text-slate-900">
         <h3 className="text-sm sm:text-base font-black text-slate-900 flex items-center gap-2 mb-1">
           <Shield className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-600 shrink-0" />
           <span>Cambiar PIN Maestro</span>
@@ -370,7 +370,7 @@ export default function SettingsTab({
         </form>
       </div>
 
-      <div className="rounded-[28px] border border-slate-100 bg-white p-4 sm:p-6 text-slate-900">
+      <div className="app-mobile-surface rounded-[28px] border border-slate-100 bg-white p-4 sm:p-6 text-slate-900">
         <h3 className="flex items-center gap-2 text-sm font-black"><KeyRound className="h-5 w-5 text-[#1656DB]" /> Recuperar acceso</h3>
         <p className="mt-2 text-xs leading-relaxed text-slate-600">Generá un código de respaldo y guardalo fuera de esta app. Sirve una sola vez si olvidás tu PIN. Al generar otro, el anterior deja de funcionar.</p>
         <form onSubmit={handleGenerateRecoveryCode} className="mt-4 flex flex-col gap-2">
@@ -390,7 +390,7 @@ export default function SettingsTab({
       </div>
 
       {/* 3. Base de Datos & Copias de Seguridad */}
-      <div className="rounded-[28px] border border-slate-100 bg-white p-4 sm:p-6 shadow-[0_4px_24px_rgba(0,0,0,0.03)] text-slate-900">
+      <div className="app-mobile-surface rounded-[28px] border border-slate-100 bg-white p-4 sm:p-6 shadow-[0_4px_24px_rgba(0,0,0,0.03)] text-slate-900">
         <h3 className="text-sm sm:text-base font-black text-slate-900 flex items-center gap-2 mb-1">
           <Database className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-600 shrink-0" />
           <span>Respaldo & Portabilidad</span>
@@ -429,7 +429,7 @@ export default function SettingsTab({
       </div>
 
       {/* 4. Datos de Prueba & Sesión */}
-      <div className="rounded-[28px] border border-slate-100 bg-white p-4 sm:p-6 shadow-[0_4px_24px_rgba(0,0,0,0.03)] text-slate-900 flex flex-col justify-between">
+      <div className="app-mobile-surface rounded-[28px] border border-slate-100 bg-white p-4 sm:p-6 shadow-[0_4px_24px_rgba(0,0,0,0.03)] text-slate-900 flex flex-col justify-between">
         <div>
           <h3 className="text-sm sm:text-base font-black text-slate-900 flex items-center gap-2 mb-1">
             <Database className="h-4 w-4 sm:h-5 sm:w-5 text-orange-500 shrink-0" />
@@ -491,7 +491,7 @@ export default function SettingsTab({
       </section>}
 
       {/* 5. Guía Interactiva & Tour del Sistema */}
-      <div className="rounded-[28px] border border-slate-200 bg-white p-4 sm:p-6 text-slate-900 md:col-span-2">
+      <div className="app-mobile-surface rounded-[28px] border border-slate-200 bg-white p-4 sm:p-6 text-slate-900 md:col-span-2">
         <h3 className="text-sm font-black">Rendimiento en este dispositivo</h3>
         <p className="mt-1 text-xs text-slate-500">Mediciones locales de carga, respuesta al toque, estabilidad y carga de datos. Se conservan hasta 30 muestras por métrica, sin datos de tu cuenta.</p>
         <button type="button" onClick={() => setWebVitals(readPerformanceSamples())} className="mt-3 min-h-11 rounded-xl bg-slate-100 px-4 text-xs font-bold text-slate-700">Ver mediciones</button>
@@ -505,7 +505,7 @@ export default function SettingsTab({
         </div>}
         {webVitals && <p className="mt-2 text-[11px] text-slate-500">DATA mide la respuesta de tus movimientos; su meta de 1,5 s es orientativa. LCP, INP y CLS son métricas del navegador. Medí varias cargas e interacciones en un teléfono real.</p>}
       </div>
-      <div className="rounded-[28px] border border-blue-100 bg-gradient-to-br from-blue-50/70 via-white to-blue-50/30 p-4 sm:p-6 shadow-[0_4px_24px_rgba(22,86,219,0.06)] text-slate-900 md:col-span-2">
+      <div className="app-mobile-surface rounded-[28px] border border-blue-100 bg-gradient-to-br from-blue-50/70 via-white to-blue-50/30 p-4 sm:p-6 shadow-[0_4px_24px_rgba(22,86,219,0.06)] text-slate-900 md:col-span-2">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="inline-flex items-center gap-1.5 rounded-full bg-blue-100/80 px-2.5 py-0.5 text-[10px] font-black text-[#1656DB]">

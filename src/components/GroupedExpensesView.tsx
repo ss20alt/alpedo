@@ -245,7 +245,7 @@ export default function GroupedExpensesView({
       {/* Top Insights Strip (if there are groups) */}
       {scopedTopStats && (
         <>
-        <div className="sm:hidden flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white px-3.5 py-3 shadow-sm text-slate-900">
+        <div className="app-mobile-surface sm:hidden flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white px-3.5 py-3 shadow-sm text-slate-900">
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-slate-400">
               <Layers className="h-3.5 w-3.5 text-emerald-600" />
@@ -317,7 +317,7 @@ export default function GroupedExpensesView({
       )}
 
       {/* Main Filter & Search Card */}
-      <div className="rounded-[28px] border border-slate-100 bg-white p-4 sm:p-6 shadow-[0_4px_24px_rgba(0,0,0,0.03)] text-slate-900">
+      <div className="app-mobile-surface rounded-[28px] border border-slate-100 bg-white p-4 sm:p-6 shadow-[0_4px_24px_rgba(0,0,0,0.03)] text-slate-900">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
           <div>
             <h2 className="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2">

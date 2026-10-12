@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Wallet,
-  ArrowDown,
   ArrowRight,
   ArrowLeft,
   X,
@@ -103,7 +102,7 @@ export const TOUR_STEPS: TourStep[] = [
     headline: "Tu dinero con un propósito claro",
     description:
       "La app paraguaya para ordenar tus gastos, cuidar tu presupuesto y tener tus cuentas claras.",
-    tip: "Podés volver a esta guía desde Ayuda cuando quieras.",
+    tip: "Podés volver a esta guía desde Ajustes cuando quieras.",
     targetTab: "dashboard",
     targetSelector: "#tour-header-logo",
     spotlightPadding: 6,
@@ -609,17 +608,11 @@ export default function InteractiveTour({
   };
 
   const winH = typeof window !== "undefined" ? window.innerHeight : 800;
-  const headerBottom = getHeaderBottom();
 
   // Keep the guide card anchored on mobile; desktop can use the more spacious side of the target.
   const isTargetInUpperHalf = targetBox ? targetBox.top < winH * 0.48 : false;
   const radius = targetBox?.isCircular ? Math.max(targetBox.width, targetBox.height) / 2 : 24;
 
-  // Safe placement for the "MIRÁ ACÁ" badge so it never hits the header:
-  const isRightBelowHeader = targetBox ? targetBox.top < headerBottom + 26 : false;
-  const isNearRight = targetBox
-    ? targetBox.left > (typeof window !== "undefined" ? window.innerWidth : 400) - 120
-    : false;
   const progressPercent = Math.round(((currentStepIndex + 1) / TOUR_STEPS.length) * 100);
 
   return (
@@ -681,16 +674,6 @@ export default function InteractiveTour({
           }}
           className="fixed pointer-events-none z-45 ring-4 ring-[#1656DB] shadow-[0_0_35px_rgba(22,86,219,0.55)] transition-[box-shadow,opacity] duration-200 ease-out"
         >
-          {/* Animated Attention Badge with screen safe-clamping */}
-          <div
-            className={`absolute flex items-center gap-1 rounded-full bg-[#104BC9] px-2.5 py-0.5 text-[9px] sm:text-[10px] font-black tracking-wider text-white shadow-md ${
-              isRightBelowHeader
-                ? "top-2 left-2.5"
-                : "-top-3.5"
-            } ${isNearRight ? "right-1" : "left-2"}`}
-          >
-            <><ArrowDown className="h-3 w-3" /> {currentStep.isCircular ? "Control señalado" : "Ver sección"}</>
-          </div>
         </div>
       )}
 

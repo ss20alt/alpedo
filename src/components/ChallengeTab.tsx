@@ -194,10 +194,10 @@ export default function ChallengeTab({ currencySymbol }: ChallengeTabProps) {
         </div>
       )}
       {/* 1. Hero Banner */}
-      <div id="tour-challenge-card" className="relative overflow-hidden rounded-[24px] border border-orange-200/80 bg-gradient-to-br from-orange-50/70 via-white to-amber-50/80 p-4 text-slate-900 shadow-[0_4px_24px_rgba(249,115,22,0.06)] sm:rounded-[28px] sm:p-7">
+      <div id="tour-challenge-card" className="app-mobile-surface relative overflow-hidden rounded-[24px] border border-orange-200/80 bg-gradient-to-br from-orange-50/70 via-white to-amber-50/80 p-4 text-slate-900 shadow-[0_4px_24px_rgba(249,115,22,0.06)] sm:rounded-[28px] sm:p-7">
         <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-5">
           <div className="space-y-2">
-            <div className="inline-flex items-center gap-1.5 rounded-full bg-orange-100 border border-orange-200 px-3 py-1 text-xs font-black text-orange-700 uppercase tracking-widest shadow-sm">
+            <div className="app-mobile-kicker inline-flex items-center gap-1.5 rounded-full bg-orange-100 border border-orange-200 px-3 py-1 text-xs font-black text-orange-700 uppercase tracking-widest shadow-sm">
               <Flame className="h-4 w-4 text-orange-500 shrink-0 " />
               <span>RETO DE AHORRO</span>
             </div>
@@ -206,11 +206,11 @@ export default function ChallengeTab({ currencySymbol }: ChallengeTabProps) {
             </h2>
             <p className="text-xs sm:text-sm text-slate-600 max-w-2xl leading-relaxed font-medium">
               La regla es una sola: <strong>cada vez que cobres</strong>, antes de gastar en cualquier cosa, separás tu porcentaje correspondiente.
-              ¿Es poco al principio? Sí. Y ese es el punto: <span className="text-orange-600 font-bold">el juego es la constancia, no el monto.</span>
+              ¿Es poco al principio? Sí. Y ese es el punto: <span className="text-blue-700 font-bold">el juego es la constancia, no el monto.</span>
             </p>
           </div>
 
-          <div className="shrink-0 rounded-2xl border border-orange-200 bg-white p-3 text-center shadow-sm sm:p-4 sm:text-right">
+          <div className="app-mobile-subcard shrink-0 rounded-2xl border border-orange-200 bg-white p-3 text-center shadow-sm sm:p-4 sm:text-right">
             <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">
               Total al Completar (12 Meses)
             </div>
@@ -234,8 +234,8 @@ export default function ChallengeTab({ currencySymbol }: ChallengeTabProps) {
           </div>
         </div>
 
-        <div className="mt-4 rounded-xl border border-orange-100 bg-white/75 p-3 text-xs text-slate-600 sm:hidden">
-          <span className="font-black text-orange-700">1% → 12%</span>
+        <div className="app-mobile-subcard mt-4 rounded-xl border border-orange-100 bg-white/75 p-3 text-xs text-slate-600 sm:hidden">
+          <span className="font-black text-blue-700">1% → 12%</span>
           <span className="ml-2">Subí un punto por mes y marcá el ahorro cuando lo separes.</span>
         </div>
 
@@ -257,7 +257,7 @@ export default function ChallengeTab({ currencySymbol }: ChallengeTabProps) {
       </div>
 
       {/* 2. Configurador de Salario & Mes de Inicio */}
-      <form onSubmit={saveConfig} className="rounded-[24px] border border-slate-100 bg-white p-4 text-slate-900 shadow-[0_4px_24px_rgba(0,0,0,0.03)] sm:rounded-[28px] sm:p-6">
+      <form onSubmit={saveConfig} className="app-mobile-surface rounded-[24px] border border-slate-100 bg-white p-4 text-slate-900 shadow-[0_4px_24px_rgba(0,0,0,0.03)] sm:rounded-[28px] sm:p-6">
         <div className="flex flex-col gap-3 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <div>
             <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
@@ -321,7 +321,7 @@ export default function ChallengeTab({ currencySymbol }: ChallengeTabProps) {
                   type="button"
                   onClick={() => setSalaryDraft(String(item.val))}
                   aria-pressed={Number(salaryDraft) === item.val}
-                  className={`min-h-11 rounded-xl px-3 text-xs font-mono font-bold transition active:scale-95 ${
+                  className={`app-mobile-choice min-h-11 rounded-xl px-3 text-xs font-mono font-bold transition active:scale-95 ${
                     Number(salaryDraft) === item.val
                       ? "bg-slate-900 text-white font-black shadow-sm"
                       : "bg-slate-100 text-slate-700 hover:bg-slate-200"
@@ -361,13 +361,13 @@ export default function ChallengeTab({ currencySymbol }: ChallengeTabProps) {
         </div>
 
         {/* Porcentaje Cumplido */}
-        <div className="flex min-w-0 flex-col justify-between rounded-[22px] border border-slate-100 bg-white p-3 text-slate-900 shadow-sm sm:rounded-[24px] sm:p-5">
+        <div className="app-mobile-surface flex min-w-0 flex-col justify-between rounded-[22px] border border-slate-100 bg-white p-3 text-slate-900 shadow-sm sm:rounded-[24px] sm:p-5">
           <div>
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">
                 Progreso del Reto
               </span>
-              <span className="text-xs font-black text-orange-600 font-mono">
+              <span className="text-xs font-black text-blue-700 font-mono">
                 {progressPercent}%
               </span>
             </div>
@@ -379,7 +379,7 @@ export default function ChallengeTab({ currencySymbol }: ChallengeTabProps) {
           <div className="mt-3">
             <div className="h-2 w-full rounded-full bg-slate-100 overflow-hidden">
               <div
-                className="h-full bg-gradient-to-r from-orange-500 to-emerald-500 transition-all duration-500"
+                className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 transition-all duration-500"
                 style={{ width: `${progressPercent}%` }}
                   role="progressbar"
                   aria-label="Progreso del reto de ahorro"
@@ -408,11 +408,11 @@ export default function ChallengeTab({ currencySymbol }: ChallengeTabProps) {
       </div>
 
       {/* 4. Roadmap de los 12 Meses */}
-      <div className="rounded-[28px] border border-slate-100 bg-white p-4 sm:p-6 shadow-[0_4px_24px_rgba(0,0,0,0.03)] text-slate-900">
+        <div className="app-mobile-surface rounded-[28px] border border-slate-100 bg-white p-4 sm:p-6 shadow-[0_4px_24px_rgba(0,0,0,0.03)] text-slate-900">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-4 mb-4">
           <div>
             <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-orange-500 shrink-0" />
+              <TrendingUp className="h-5 w-5 text-blue-600 shrink-0" />
               <span>El Plan Mes a Mes (1% al 12%)</span>
             </h3>
             <p className="text-xs text-slate-500 font-medium mt-0.5">

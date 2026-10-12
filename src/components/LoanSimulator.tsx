@@ -169,7 +169,7 @@ export default function LoanSimulator({ metrics, currencySymbol }: LoanSimulator
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* Configuration Card */}
-      <div id="tour-loans-card" className="rounded-[28px] border border-slate-100 bg-white p-4 sm:p-6 shadow-[0_4px_24px_rgba(0,0,0,0.03)] text-slate-900">
+      <div id="tour-loans-card" className="app-mobile-surface rounded-[28px] border border-slate-100 bg-white p-4 sm:p-6 shadow-[0_4px_24px_rgba(0,0,0,0.03)] text-slate-900">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
           <div>
             <h2 className="text-lg sm:text-xl font-black text-slate-900 flex items-center gap-2">
@@ -243,7 +243,7 @@ export default function LoanSimulator({ metrics, currencySymbol }: LoanSimulator
                   type="button"
                   aria-pressed={loanAmount === quick}
                   onClick={() => setLoanAmountInput(String(quick))}
-                  className={`min-h-11 min-w-0 rounded-xl px-1 text-[11px] sm:text-xs font-mono font-bold transition active:scale-95 ${
+                  className={`app-mobile-choice min-h-11 min-w-0 rounded-xl px-1 text-[11px] sm:text-xs font-mono font-bold transition active:scale-95 ${
                     loanAmount === quick
                       ? "bg-slate-900 text-white font-black shadow-sm"
                       : "bg-slate-100 text-slate-700 hover:bg-slate-200"
@@ -278,7 +278,7 @@ export default function LoanSimulator({ metrics, currencySymbol }: LoanSimulator
                   type="button"
                   aria-pressed={installments === m}
                   onClick={() => setInstallmentsInput(String(m))}
-                  className={`min-h-11 min-w-0 flex items-center justify-center rounded-xl text-[11px] font-mono font-bold transition active:scale-95 ${
+                  className={`app-mobile-choice min-h-11 min-w-0 flex items-center justify-center rounded-xl text-[11px] font-mono font-bold transition active:scale-95 ${
                     installments === m
                       ? "bg-slate-900 text-white font-black shadow-sm"
                       : "bg-slate-100 text-slate-700 hover:bg-slate-200"
@@ -435,7 +435,7 @@ export default function LoanSimulator({ metrics, currencySymbol }: LoanSimulator
         </div>
 
         {/* Comparador: Antes vs Después */}
-        <div className="rounded-[28px] border border-slate-100 bg-white p-5 sm:p-6 shadow-[0_4px_24px_rgba(0,0,0,0.03)] text-slate-900 flex flex-col justify-between">
+        <div className="app-mobile-surface rounded-[28px] border border-slate-100 bg-white p-5 sm:p-6 shadow-[0_4px_24px_rgba(0,0,0,0.03)] text-slate-900 flex flex-col justify-between">
           <div>
             <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-500 mb-3 sm:mb-4">
               Indicador de tus finanzas
@@ -516,7 +516,7 @@ export default function LoanSimulator({ metrics, currencySymbol }: LoanSimulator
         </div>
 
         {/* El "Factor Gastos al Pedo" & Guardar */}
-        <div className="rounded-[28px] border border-slate-100 bg-white p-5 sm:p-6 shadow-[0_4px_24px_rgba(0,0,0,0.03)] text-slate-900 flex flex-col justify-between">
+        <div className="app-mobile-surface rounded-[28px] border border-slate-100 bg-white p-5 sm:p-6 shadow-[0_4px_24px_rgba(0,0,0,0.03)] text-slate-900 flex flex-col justify-between">
           <div>
             <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-orange-600 mb-2">
               <Flame className="h-4 w-4 shrink-0" />
@@ -574,7 +574,7 @@ export default function LoanSimulator({ metrics, currencySymbol }: LoanSimulator
 
       {/* Simulaciones Guardadas */}
       {savedSimulations.length > 0 && (
-        <div className="rounded-[28px] border border-slate-100 bg-white p-4 sm:p-6 shadow-[0_4px_24px_rgba(0,0,0,0.03)] text-slate-900">
+        <div className="app-mobile-surface rounded-[28px] border border-slate-100 bg-white p-4 sm:p-6 shadow-[0_4px_24px_rgba(0,0,0,0.03)] text-slate-900">
           <h3 className="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-wider mb-3 sm:mb-4">
             Simulaciones Guardadas ({savedSimulations.length})
           </h3>
