@@ -160,6 +160,12 @@ export default function Home() {
   const touchPullStartY = React.useRef<number | null>(null);
 
   useEffect(() => {
+    try {
+      if (currentUser?.id) localStorage.setItem("alpedo_active_user_id", String(currentUser.id));
+    } catch { /* El almacenamiento local puede estar deshabilitado. */ }
+  }, [currentUser?.id]);
+
+  useEffect(() => {
     if (!currentUser?.id) return;
     const timer = window.setTimeout(() => {
       setPrivacyMode(localStorage.getItem(`alpedo_privacy_mode_${currentUser.id}`) === "true");
@@ -355,6 +361,7 @@ export default function Home() {
     }
     dataRequestId.current += 1;
     dataAbortController.current?.abort();
+    try { localStorage.removeItem("alpedo_active_user_id"); } catch { /* El almacenamiento local puede estar deshabilitado. */ }
     setIsAuthenticated(false);
     setCurrentUser(null);
     setMetrics(null);

@@ -20,7 +20,7 @@ Si la cuenta eliminada era colaboradora de una meta ajena, la meta se conserva, 
 
 ## Datos locales del dispositivo
 
-Al terminar, el navegador actual borra las claves locales asociadas a esa cuenta (modo privado, guía, borrador de movimiento y mes revisado) y el correo recordado si coincide. El servidor no puede borrar el almacenamiento de otros teléfonos o navegadores. Cerrá sesión en esos dispositivos y eliminá sus datos del sitio si querés quitar también sus borradores locales.
+Al terminar, el navegador actual borra las claves locales asociadas a esa cuenta (modo privado, guía, borradores de movimientos y notas offline) y el correo recordado si coincide. Las notas offline nuevas se vinculan al usuario para que no se compartan al cambiar de cuenta. Las notas antiguas que se guardaron antes de esta vinculación no tienen propietario identificable y pueden permanecer en el almacenamiento local; borrá los datos del sitio si querés quitarlas. El servidor tampoco puede borrar el almacenamiento de otros teléfonos o navegadores.
 
 ## Verificación antes de publicar
 

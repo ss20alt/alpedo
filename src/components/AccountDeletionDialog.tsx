@@ -42,6 +42,8 @@ export default function AccountDeletionDialog({ email, userId, onCancel, onCompl
         localStorage.removeItem(`alpedo_privacy_mode_${userId}`);
         localStorage.removeItem(`alpedo_tour_completed_${userId}`);
         localStorage.removeItem(`alpedo_transaction_draft_${userId}`);
+        localStorage.removeItem(`alpedo_offline_capture_${userId}`);
+        localStorage.removeItem("alpedo_active_user_id");
         for (let index = localStorage.length - 1; index >= 0; index -= 1) {
           const key = localStorage.key(index);
           if (key?.startsWith(`reviewed_month_${userId}_`)) localStorage.removeItem(key);
@@ -88,7 +90,7 @@ export default function AccountDeletionDialog({ email, userId, onCancel, onCompl
           <p className="font-black">Se eliminarán de forma permanente:</p>
           <p className="mt-1">Tu perfil, movimientos, simulaciones, reto de ahorro, rachas, código de recuperación y metas que hayas creado con todos sus aportes.</p>
           <p className="mt-2">Si participás en la meta de otra persona, se quitará tu vínculo y tus aportes quedarán como «Cuenta eliminada», conservando el total de esa meta.</p>
-          <p className="mt-2">Los borradores guardados en otros dispositivos no se pueden borrar desde acá; eliminá esos datos localmente en cada dispositivo.</p>
+          <p className="mt-2">Los datos locales de otros dispositivos y las notas offline antiguas, guardadas antes de vincularlas a una cuenta, no se pueden identificar ni borrar desde acá. Eliminá los datos del sitio en cada navegador si querés quitarlos también.</p>
         </div>
 
         <form onSubmit={handleSubmit} className="mt-4 space-y-3">

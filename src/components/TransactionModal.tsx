@@ -101,14 +101,15 @@ export default function TransactionModal({
       }
       setError(null);
       try {
-        const note = JSON.parse(localStorage.getItem("alpedo_offline_capture") || "null");
-        setOfflineNote(!editingTransaction && note && typeof note.amount === "string" && typeof note.description === "string" ? note : null);
+        const noteKey = `alpedo_offline_capture_${userId}`;
+        const note = JSON.parse(localStorage.getItem(noteKey) || "null");
+        setOfflineNote(!editingTransaction && note && String(note.userId) === String(userId) && typeof note.amount === "string" && typeof note.description === "string" ? note : null);
       } catch { setOfflineNote(null); }
       setDragOffsetY(0);
       draftReady.current = true;
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [editingTransaction, initialPreset, isOpen, draftKey]);
+  }, [editingTransaction, initialPreset, isOpen, draftKey, userId]);
 
   useEffect(() => {
     if (!isOpen || editingTransaction || !draftReady.current) return;
@@ -355,7 +356,7 @@ export default function TransactionModal({
             setAmount(offlineNote.amount);
             setDescription(offlineNote.description);
             setDate(getParaguayDateString());
-            localStorage.removeItem("alpedo_offline_capture");
+            localStorage.removeItem(`alpedo_offline_capture_${userId}`);
             setOfflineNote(null);
             setDraftNotice("Nota recuperada. Revisá los datos antes de guardar.");
           }} className="mt-2 min-h-11 rounded-lg bg-[#1656DB] px-4 font-bold text-white disabled:opacity-50">{amount || description ? "Terminá tu borrador para recuperarla" : "Recuperar nota"}</button>

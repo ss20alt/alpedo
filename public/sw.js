@@ -1,4 +1,4 @@
-const CACHE = "alpedo-offline-v1";
+const CACHE = "alpedo-offline-v2";
 const OFFLINE_FILES = ["/offline.html", "/offline.js"];
 
 self.addEventListener("install", (event) => {
