@@ -4,7 +4,7 @@ RUN apk add --no-cache libc6-compat python3 make g++
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm install
+RUN npm ci
 
 # Etapa 2: Compilación
 FROM node:22-alpine AS builder
@@ -25,12 +25,11 @@ ENV HOSTNAME="0.0.0.0"
 
 RUN apk add --no-cache libc6-compat
 
-# Copiar archivos compilados y dependencias necesarias
+# El modo standalone copia solo las dependencias usadas en runtime.
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./package.json
 
 EXPOSE 3000
 
-CMD ["npm", "start"]
+CMD ["node", "server.js"]

@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
-import { clearSessionCookie, deleteAccountWithPin, getCurrentUser } from "@/lib/auth";
+import {
+  clearSessionCookie,
+  deleteAccountWithPin,
+  getAuthLoginWaitSeconds,
+  getCurrentUser,
+  recordAuthLoginFailure,
+} from "@/lib/auth";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -28,8 +34,18 @@ export async function DELETE(req: Request) {
   }
 
   try {
+    const waitSeconds = await getAuthLoginWaitSeconds(user.email);
+    if (waitSeconds > 0) {
+      return NextResponse.json(
+        { error: `Demasiados intentos. Esperá ${waitSeconds} segundos.` },
+        { status: 429 }
+      );
+    }
     const deleted = await deleteAccountWithPin(user.id, pin);
-    if (!deleted) return NextResponse.json({ error: "El PIN actual es incorrecto" }, { status: 400 });
+    if (!deleted) {
+      await recordAuthLoginFailure(user.email);
+      return NextResponse.json({ error: "El PIN actual es incorrecto" }, { status: 400 });
+    }
     try {
       await clearSessionCookie();
     } catch (cookieError) {

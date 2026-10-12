@@ -13,6 +13,7 @@ if (!new Set(["localhost", "127.0.0.1", "::1"]).has(new URL(baseUrl).hostname)) 
 const pool = new Pool({ connectionString: databaseUrl });
 let qaAccount;
 let ownerAccount;
+let lockoutAccount;
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -52,6 +53,15 @@ async function deleteViaApi(account, values = {}) {
   return { response, data: await response.json().catch(() => ({})) };
 }
 
+async function changePinViaApi(account, oldPin = "000000") {
+  const response = await fetch(`${baseUrl}/api/auth`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: account.cookie },
+    body: JSON.stringify({ action: "change_pin", oldPin, newPin: "123456" }),
+  });
+  return { response, data: await response.json().catch(() => ({})) };
+}
+
 async function accountExists(id) {
   return (await pool.query("SELECT 1 FROM users WHERE id = $1", [id])).rowCount === 1;
 }
@@ -59,6 +69,7 @@ async function accountExists(id) {
 async function cleanup(account) {
   if (!account || !(await accountExists(account.id))) return;
   try {
+    await pool.query("DELETE FROM auth_login_limits WHERE LOWER(email) = LOWER($1)", [account.email]);
     await deleteViaApi(account);
   } catch {
     // Best-effort cleanup for the two explicitly created QA accounts only.
@@ -74,6 +85,28 @@ async function run() {
   const initialCount = Number((await pool.query("SELECT COUNT(*)::int AS count FROM users")).rows[0].count);
   qaAccount = await registerAccount("participant");
   ownerAccount = await registerAccount("owner");
+  lockoutAccount = await registerAccount("lockout");
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const result = await changePinViaApi(lockoutAccount);
+    assert(result.response.status === 400, `Wrong PIN attempt ${attempt + 1} returned ${result.response.status}.`);
+  }
+  const blockedPinChange = await changePinViaApi(lockoutAccount);
+  assert(blockedPinChange.response.status === 429, `PIN change lockout returned ${blockedPinChange.response.status}.`);
+  await pool.query("DELETE FROM auth_login_limits WHERE LOWER(email) = LOWER($1)", [lockoutAccount.email]);
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const result = await deleteViaApi(lockoutAccount, { pin: "000000" });
+    assert(result.response.status === 400, `Wrong deletion PIN attempt ${attempt + 1} returned ${result.response.status}.`);
+    assert(await accountExists(lockoutAccount.id), "Account was deleted after an incorrect PIN.");
+  }
+  const blockedDeletion = await deleteViaApi(lockoutAccount, { pin: lockoutAccount.pin });
+  assert(blockedDeletion.response.status === 429, `Account-deletion lockout returned ${blockedDeletion.response.status}.`);
+  await pool.query("DELETE FROM auth_login_limits WHERE LOWER(email) = LOWER($1)", [lockoutAccount.email]);
+  const lockoutCleanup = await deleteViaApi(lockoutAccount);
+  assert(lockoutCleanup.response.ok, "Could not clean up the lockout QA account.");
+  lockoutAccount = null;
+  console.log("PASS PIN change and account deletion lock after five incorrect attempts");
 
   const qaCode = `QA-${qaAccount.id}-CODE`;
   const ownedGoalId = (await pool.query(

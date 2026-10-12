@@ -5,6 +5,62 @@ import { cookies } from "next/headers";
 const SESSION_COOKIE_NAME = "finanzas_auth_session";
 let sessionsReady: Promise<void> | null = null;
 let recoveryReady: Promise<void> | null = null;
+let loginLimitsReady: Promise<void> | null = null;
+
+async function ensureLoginLimitsTable() {
+  if (!loginLimitsReady) {
+    loginLimitsReady = db.execute(`CREATE TABLE IF NOT EXISTS auth_login_limits (
+      email TEXT PRIMARY KEY,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      blocked_until TIMESTAMPTZ
+    )`).then(() => undefined).catch((error) => {
+      loginLimitsReady = null;
+      throw error;
+    });
+  }
+  await loginLimitsReady;
+}
+
+/** Return the remaining lockout time for PIN-protected account actions. */
+export async function getAuthLoginWaitSeconds(email: string): Promise<number> {
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!normalizedEmail) return 0;
+  await ensureLoginLimitsTable();
+  const limit = await db.queryOne<{ blocked_until: Date | string | null }>(
+    "SELECT blocked_until FROM auth_login_limits WHERE email = ?",
+    [normalizedEmail]
+  );
+  if (!limit?.blocked_until) return 0;
+  const remainingMs = new Date(limit.blocked_until).getTime() - Date.now();
+  return Number.isFinite(remainingMs) && remainingMs > 0 ? Math.ceil(remainingMs / 1000) : 0;
+}
+
+/** Track an incorrect PIN across login, recovery, and account-security actions. */
+export async function recordAuthLoginFailure(email: string): Promise<void> {
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!normalizedEmail) return;
+  await ensureLoginLimitsTable();
+  await db.execute(
+    `INSERT INTO auth_login_limits (email, attempts) VALUES (?, 1)
+     ON CONFLICT (email) DO UPDATE SET
+       attempts = CASE
+         WHEN auth_login_limits.blocked_until IS NOT NULL AND auth_login_limits.blocked_until <= NOW()
+         THEN 1 ELSE auth_login_limits.attempts + 1 END,
+       blocked_until = CASE
+         WHEN auth_login_limits.blocked_until IS NOT NULL AND auth_login_limits.blocked_until <= NOW()
+         THEN NULL
+         WHEN auth_login_limits.attempts + 1 >= 5 THEN NOW() + INTERVAL '5 minutes'
+         ELSE NULL END`,
+    [normalizedEmail]
+  );
+}
+
+export async function clearAuthLoginFailures(email: string): Promise<void> {
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!normalizedEmail) return;
+  await ensureLoginLimitsTable();
+  await db.execute("DELETE FROM auth_login_limits WHERE email = ?", [normalizedEmail]);
+}
 
 export interface User {
   id: number;

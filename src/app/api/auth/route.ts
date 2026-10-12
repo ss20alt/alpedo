@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import db from "@/lib/db";
 import {
   isPinConfigured,
   getCurrentUser,
@@ -10,38 +9,42 @@ import {
   clearSessionCookie,
   createRecoveryCode,
   resetPinWithRecovery,
+  getAuthLoginWaitSeconds,
+  recordAuthLoginFailure,
+  clearAuthLoginFailures,
 } from "@/lib/auth";
 
-let loginLimitsReady: Promise<void> | null = null;
+const MAX_AUTH_REQUEST_BYTES = 8 * 1024;
 
-async function ensureLoginLimits() {
-  if (!loginLimitsReady) {
-    loginLimitsReady = db.execute(`CREATE TABLE IF NOT EXISTS auth_login_limits (
-      email TEXT PRIMARY KEY,
-      attempts INTEGER NOT NULL DEFAULT 0,
-      blocked_until TIMESTAMPTZ
-    )`).then(() => undefined).catch((error) => {
-      loginLimitsReady = null;
-      throw error;
-    });
+async function readLimitedJson(req: Request): Promise<
+  { ok: true; value: unknown } | { ok: false; tooLarge?: boolean }
+> {
+  const contentLength = Number(req.headers.get("content-length") || 0);
+  if (Number.isFinite(contentLength) && contentLength > MAX_AUTH_REQUEST_BYTES) {
+    return { ok: false, tooLarge: true };
   }
-  await loginLimitsReady;
-}
 
-async function recordFailedLogin(email: string) {
-  await db.execute(
-    `INSERT INTO auth_login_limits (email, attempts) VALUES (?, 1)
-     ON CONFLICT (email) DO UPDATE SET
-       attempts = CASE
-         WHEN auth_login_limits.blocked_until IS NOT NULL AND auth_login_limits.blocked_until <= NOW()
-         THEN 1 ELSE auth_login_limits.attempts + 1 END,
-       blocked_until = CASE
-         WHEN auth_login_limits.blocked_until IS NOT NULL AND auth_login_limits.blocked_until <= NOW()
-         THEN NULL
-         WHEN auth_login_limits.attempts + 1 >= 5 THEN NOW() + INTERVAL '5 minutes'
-         ELSE NULL END`,
-    [email]
-  );
+  const reader = req.body?.getReader();
+  if (!reader) return { ok: false };
+  const decoder = new TextDecoder();
+  let body = "";
+  let bytesRead = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    bytesRead += value.byteLength;
+    if (bytesRead > MAX_AUTH_REQUEST_BYTES) {
+      await reader.cancel();
+      return { ok: false, tooLarge: true };
+    }
+    body += decoder.decode(value, { stream: true });
+  }
+  body += decoder.decode();
+  try {
+    return { ok: true, value: JSON.parse(body) as unknown };
+  } catch {
+    return { ok: false };
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -69,12 +72,14 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    let parsedBody: unknown;
-    try {
-      parsedBody = await req.json();
-    } catch {
+    const parsedRequest = await readLimitedJson(req);
+    if (!parsedRequest.ok && parsedRequest.tooLarge) {
+      return NextResponse.json({ error: "La solicitud supera el tamaño permitido" }, { status: 413 });
+    }
+    if (!parsedRequest.ok) {
       return NextResponse.json({ error: "Formato JSON inválido" }, { status: 400 });
     }
+    const parsedBody = parsedRequest.value;
 
     if (!isRecord(parsedBody)) {
       return NextResponse.json({ error: "Formato JSON inválido" }, { status: 400 });
@@ -91,12 +96,8 @@ export async function POST(req: Request) {
       if (!clientKey || clientKey.length > 255 || (action === "login" && !pin)) {
         return NextResponse.json({ error: "Ingresá el correo de tu cuenta" }, { status: 400 });
       }
-      await ensureLoginLimits();
-      const rateLimit = await db.queryOne<{ blocked_until: Date | null }>(
-        "SELECT blocked_until FROM auth_login_limits WHERE email = ?", [clientKey]
-      );
-      if (rateLimit?.blocked_until && new Date(rateLimit.blocked_until).getTime() > Date.now()) {
-        const waitSeconds = Math.ceil((new Date(rateLimit.blocked_until).getTime() - Date.now()) / 1000);
+      const waitSeconds = await getAuthLoginWaitSeconds(clientKey);
+      if (waitSeconds > 0) {
         return NextResponse.json(
           { error: `Demasiados intentos. Esperá ${waitSeconds} segundos.` },
           { status: 429 }
@@ -108,19 +109,15 @@ export async function POST(req: Request) {
       const user = await getCurrentUser();
       if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
       const recoveryKey = user.email.toLowerCase();
-      await ensureLoginLimits();
-      const limit = await db.queryOne<{ blocked_until: Date | null }>(
-        "SELECT blocked_until FROM auth_login_limits WHERE email = ?", [recoveryKey]
-      );
-      if (limit?.blocked_until && new Date(limit.blocked_until).getTime() > Date.now()) {
+      if (await getAuthLoginWaitSeconds(recoveryKey)) {
         return NextResponse.json({ error: "Demasiados intentos. Intentá más tarde." }, { status: 429 });
       }
       const code = await createRecoveryCode(user, pin);
       if (!code) {
-        await recordFailedLogin(recoveryKey);
+        await recordAuthLoginFailure(recoveryKey);
         return NextResponse.json({ error: "PIN actual incorrecto" }, { status: 400 });
       }
-      await db.execute("DELETE FROM auth_login_limits WHERE email = ?", [recoveryKey]);
+      await clearAuthLoginFailures(recoveryKey);
       return NextResponse.json({ code }, { headers: { "Cache-Control": "no-store" } });
     }
 
@@ -131,10 +128,10 @@ export async function POST(req: Request) {
       }
       const changed = await resetPinWithRecovery(email, recoveryCode, newPin);
       if (!changed) {
-        await recordFailedLogin(clientKey);
+        await recordAuthLoginFailure(clientKey);
         return NextResponse.json({ error: "Correo o código de recuperación incorrecto" }, { status: 400 });
       }
-      await db.execute("DELETE FROM auth_login_limits WHERE email = ?", [clientKey]);
+      await clearAuthLoginFailures(clientKey);
       return NextResponse.json({ success: true, message: "PIN actualizado. Iniciá sesión con el nuevo PIN." });
     }
 
@@ -157,8 +154,7 @@ export async function POST(req: Request) {
 
       // Automatically create session for the registered user
       await createSessionCookie(regResult.user.id);
-      await ensureLoginLimits();
-      await db.execute("DELETE FROM auth_login_limits WHERE email = ?", [clientKey]);
+      await clearAuthLoginFailures(clientKey);
 
       return NextResponse.json({
         success: true,
@@ -176,7 +172,7 @@ export async function POST(req: Request) {
       const authResult = await verifyUserLogin(email, pin);
 
       if (!authResult.success || !authResult.user) {
-        await recordFailedLogin(clientKey);
+        await recordAuthLoginFailure(clientKey);
 
         return NextResponse.json(
           { error: authResult.error || "PIN o credenciales incorrectas" },
@@ -185,7 +181,7 @@ export async function POST(req: Request) {
       }
 
       // Success
-      await db.execute("DELETE FROM auth_login_limits WHERE email = ?", [clientKey]);
+      await clearAuthLoginFailures(clientKey);
       await createSessionCookie(authResult.user.id);
 
       return NextResponse.json({
@@ -214,9 +210,18 @@ export async function POST(req: Request) {
       if (!/^\d{6,12}$/.test(newPin)) {
         return NextResponse.json({ error: "El nuevo PIN debe tener entre 6 y 12 números" }, { status: 400 });
       }
+      const waitSeconds = await getAuthLoginWaitSeconds(user.email);
+      if (waitSeconds > 0) {
+        return NextResponse.json(
+          { error: `Demasiados intentos. Esperá ${waitSeconds} segundos.` },
+          { status: 429 }
+        );
+      }
       if (!(await changePinForUser(user, oldPin, newPin))) {
+        await recordAuthLoginFailure(user.email);
         return NextResponse.json({ error: "El PIN actual es incorrecto" }, { status: 400 });
       }
+      await clearAuthLoginFailures(user.email);
       await createSessionCookie(user.id);
       return NextResponse.json({ success: true, message: "PIN actualizado exitosamente" });
     }

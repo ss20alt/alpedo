@@ -285,10 +285,11 @@ export async function DELETE(req: Request) {
       return NextResponse.json({ error: "ID requerido" }, { status: 400 });
     }
 
-    await db.execute(
+    const deleted = await db.execute(
       "DELETE FROM transactions WHERE id = ? AND (user_id = ? OR (user_id IS NULL AND ? = 1))",
       [id, user.id, user.id]
     );
+    if (deleted === 0) return NextResponse.json({ error: "Movimiento no encontrado" }, { status: 404 });
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("Error deleting transaction:", err);
