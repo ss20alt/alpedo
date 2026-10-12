@@ -3,15 +3,33 @@ import db from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { calculateFinancialMetrics, Transaction } from "@/lib/finance-engine";
 import { getParaguayDateString } from "@/lib/date-utils";
+import { readLimitedJsonObject } from "@/lib/request-validation";
+import { scopedRateLimitResponse } from "@/lib/security";
 
 export async function POST(req: Request) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
+  const limited = await scopedRateLimitResponse(req, {
+    scope: "ai-consult",
+    identity: String(user.id),
+    identityMaximum: 8,
+    windowSeconds: 60,
+    ipMaximum: 24,
+  });
+  if (limited) return limited;
 
   try {
-    const body = await req.json();
+    const parsedBody = await readLimitedJsonObject(req);
+    if (!parsedBody.ok) {
+      const tooLarge = parsedBody.reason === "too_large";
+      return NextResponse.json(
+        { error: tooLarge ? "La solicitud supera el tamaño permitido" : "Formato JSON inválido" },
+        { status: tooLarge ? 413 : 400 }
+      );
+    }
+    const body = parsedBody.value;
     const amount = Number(body?.amount);
     const description = typeof body?.description === "string"
       ? body.description.trim().slice(0, 150)

@@ -4,6 +4,8 @@ import db from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { getParaguayDateString } from "@/lib/date-utils";
 import { rankStreakParticipants } from "@/lib/streak-leaderboard";
+import { readLimitedJsonObject } from "@/lib/request-validation";
+import { enforceUserMutationRateLimit } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
 
@@ -168,9 +170,9 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
   try {
-    const [myFriendCode, myStreakDays, friendRows, leaderboardPreference, leaderboard] = await Promise.all([
-      getOrCreateFriendCode(user.id),
-      getStreakDays(user.id, true),
+    const [friendCodeSetting, myStreakDays, friendRows, leaderboardPreference, leaderboard] = await Promise.all([
+      db.queryOne<{ value: string }>("SELECT value FROM settings WHERE key = ?", [friendCodeSettingKey(user.id)]),
+      getStreakDays(user.id),
       db.query<{ friend_code: string; friend_name: string }>(
         "SELECT friend_code, friend_name FROM friend_streaks WHERE user_id = ? ORDER BY friend_name ASC",
         [user.id]
@@ -181,20 +183,11 @@ export async function GET() {
       ),
       getCommunityLeaderboard(),
     ]);
+    const myFriendCode = friendCodeSetting?.value || "";
 
     const friends = await Promise.all(
       friendRows.map(async (friend) => {
         const account = await findAccountByFriendCode(friend.friend_code);
-        if (account && account.id !== user.id) {
-          // Older versions only stored the duel for the person who entered the code.
-          // Create the missing reverse row without overwriting a nickname they chose.
-          await db.execute(
-            `INSERT INTO friend_streaks (user_id, friend_code, friend_name, streak_type)
-             VALUES (?, ?, ?, 'control_al_pedo')
-             ON CONFLICT (user_id, friend_code) DO NOTHING`,
-            [account.id, myFriendCode, user.name || "Amigo"]
-          );
-        }
         const streak = account ? await getStreakDays(account.id) : { days: null, source: "unknown" as const };
         return {
           ...friend,
@@ -225,9 +218,41 @@ export async function GET() {
 export async function POST(req: Request) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const limited = await enforceUserMutationRateLimit(req, user.id, "streaks-write", 60);
+  if (limited) return limited;
 
   try {
-    const body = await req.json();
+    const parsedBody = await readLimitedJsonObject(req);
+    if (!parsedBody.ok) {
+      const tooLarge = parsedBody.reason === "too_large";
+      return NextResponse.json(
+        { error: tooLarge ? "La solicitud supera el tamaño permitido" : "Formato JSON inválido" },
+        { status: tooLarge ? 413 : 400 }
+      );
+    }
+    const body = parsedBody.value;
+
+    if (body.action === "initialize") {
+      const ownCode = await getOrCreateFriendCode(user.id);
+      await getStreakDays(user.id, true);
+      const friendRows = await db.query<{ friend_code: string }>(
+        "SELECT friend_code FROM friend_streaks WHERE user_id = ?",
+        [user.id]
+      );
+      for (const friend of friendRows) {
+        const account = await findAccountByFriendCode(friend.friend_code);
+        if (account && account.id !== user.id) {
+          // Repair older one-sided links only during this explicit write action.
+          await db.execute(
+            `INSERT INTO friend_streaks (user_id, friend_code, friend_name, streak_type)
+             VALUES (?, ?, ?, 'control_al_pedo')
+             ON CONFLICT (user_id, friend_code) DO NOTHING`,
+            [account.id, ownCode, user.name || "Amigo"]
+          );
+        }
+      }
+      return NextResponse.json({ success: true });
+    }
 
     if (body.action === "add_friend") {
       const code = typeof body.friend_code === "string" ? body.friend_code.trim().toUpperCase() : "";

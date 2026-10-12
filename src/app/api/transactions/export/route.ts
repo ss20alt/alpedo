@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getParaguayDateString } from "@/lib/date-utils";
 import db from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
+import { rateLimitResponse } from "@/lib/security";
 
 interface TransactionRow {
   date: string;
@@ -17,6 +18,8 @@ export async function GET() {
   if (!user) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
+  const limited = await rateLimitResponse(`transaction-export:user:${user.id}`, 20, 60 * 60, "transaction-export");
+  if (limited) return limited;
 
   const rows = await db.query<TransactionRow>(`
     SELECT date, type, category, amount, description, is_recurring

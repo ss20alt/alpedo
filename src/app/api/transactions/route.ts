@@ -5,6 +5,8 @@ import { getParaguayDateString } from "@/lib/date-utils";
 import { calculateFinancialMetrics, Transaction } from "@/lib/finance-engine";
 import crypto from "crypto";
 import type { DbParameter } from "@/lib/db";
+import { readLimitedJsonObject } from "@/lib/request-validation";
+import { enforceUserMutationRateLimit } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
 
@@ -18,10 +20,14 @@ function validAmount(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value > 0 && value <= 1_000_000_000_000;
 }
 
-function validCategory(type: unknown, category: unknown): boolean {
+function validType(value: unknown): value is "income" | "expense" {
+  return value === "income" || value === "expense";
+}
+
+function validCategory(type: unknown, category: unknown): category is "fijo" | "variable" | "pasivo" | "al_pedo" {
   return type === "income"
-    ? ["fijo", "variable", "pasivo"].includes(String(category))
-    : type === "expense" && ["fijo", "variable", "al_pedo"].includes(String(category));
+    ? category === "fijo" || category === "variable" || category === "pasivo"
+    : type === "expense" && (category === "fijo" || category === "variable" || category === "al_pedo");
 }
 
 export async function GET(req: Request) {
@@ -164,19 +170,26 @@ export async function POST(req: Request) {
   if (!user) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
+  const limited = await enforceUserMutationRateLimit(req, user.id, "transactions-write");
+  if (limited) return limited;
 
   try {
-    const body = await req.json();
+    const parsedBody = await readLimitedJsonObject(req);
+    if (!parsedBody.ok) {
+      const tooLarge = parsedBody.reason === "too_large";
+      return NextResponse.json(
+        { error: tooLarge ? "La solicitud supera el tamaño permitido" : "Formato JSON inválido" },
+        { status: tooLarge ? 413 : 400 }
+      );
+    }
+    const body = parsedBody.value;
     const { type, category, amount, description, date, is_recurring } = body;
 
-    if (!type || !["income", "expense"].includes(type)) {
+    if (!validType(type)) {
       return NextResponse.json({ error: "Tipo inválido (debe ser income o expense)" }, { status: 400 });
     }
 
-    const validCategories =
-      type === "income" ? ["fijo", "variable", "pasivo"] : ["fijo", "variable", "al_pedo"];
-
-    if (!category || !validCategories.includes(category)) {
+    if (!validCategory(type, category)) {
       return NextResponse.json({ error: `Categoría inválida para ${type}` }, { status: 400 });
     }
 
@@ -193,7 +206,7 @@ export async function POST(req: Request) {
     if (date !== undefined && !validDate(date)) {
       return NextResponse.json({ error: "Fecha inválida" }, { status: 400 });
     }
-    const txDate = date || getParaguayDateString();
+    const txDate = typeof date === "string" ? date : getParaguayDateString();
     const id = crypto.randomUUID();
 
     await db.execute(
@@ -215,16 +228,26 @@ export async function PUT(req: Request) {
   if (!user) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
+  const limited = await enforceUserMutationRateLimit(req, user.id, "transactions-write");
+  if (limited) return limited;
 
   try {
-    const body = await req.json();
+    const parsedBody = await readLimitedJsonObject(req);
+    if (!parsedBody.ok) {
+      const tooLarge = parsedBody.reason === "too_large";
+      return NextResponse.json(
+        { error: tooLarge ? "La solicitud supera el tamaño permitido" : "Formato JSON inválido" },
+        { status: tooLarge ? 413 : 400 }
+      );
+    }
+    const body = parsedBody.value;
     const { id, type, category, amount, description, date, is_recurring } = body;
 
     if (typeof id !== "string" || !id) {
       return NextResponse.json({ error: "ID de movimiento requerido" }, { status: 400 });
     }
 
-    if (!validCategory(type, category)) {
+    if (!validType(type) || !validCategory(type, category)) {
       return NextResponse.json({ error: "Tipo o categoría inválidos" }, { status: 400 });
     }
 
@@ -241,7 +264,7 @@ export async function PUT(req: Request) {
     if (date !== undefined && !validDate(date)) {
       return NextResponse.json({ error: "Fecha inválida" }, { status: 400 });
     }
-    const txDate = date || getParaguayDateString();
+    const txDate = typeof date === "string" ? date : getParaguayDateString();
 
     const affected = await db.execute(
       `UPDATE transactions
@@ -267,6 +290,8 @@ export async function DELETE(req: Request) {
   if (!user) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
+  const limited = await enforceUserMutationRateLimit(req, user.id, "transactions-write");
+  if (limited) return limited;
 
   try {
     const { searchParams } = new URL(req.url);

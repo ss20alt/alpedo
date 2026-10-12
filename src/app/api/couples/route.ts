@@ -2,6 +2,8 @@ import { randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
+import { readLimitedJsonObject } from "@/lib/request-validation";
+import { enforceUserMutationRateLimit } from "@/lib/security";
 import { getParaguayDateString } from "@/lib/date-utils";
 
 interface ActiveGoalRow {
@@ -94,14 +96,24 @@ export async function POST(req: Request) {
   if (!user) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
+  const limited = await enforceUserMutationRateLimit(req, user.id, "couples-write", 60);
+  if (limited) return limited;
 
   try {
-    const body = await req.json();
+    const parsedBody = await readLimitedJsonObject(req);
+    if (!parsedBody.ok) {
+      const tooLarge = parsedBody.reason === "too_large";
+      return NextResponse.json(
+        { error: tooLarge ? "La solicitud supera el tamaño permitido" : "Formato JSON inválido" },
+        { status: tooLarge ? 413 : 400 }
+      );
+    }
+    const body = parsedBody.value;
     const { action } = body;
 
     if (action === "create_goal") {
       const { title, target_amount, target_date, category, partner_name } = body;
-      if (!title || !target_amount) {
+      if (typeof title !== "string" || !title.trim() || !target_amount) {
         return NextResponse.json({ error: "Título y monto objetivo requeridos" }, { status: 400 });
       }
 
@@ -116,12 +128,14 @@ export async function POST(req: Request) {
       if (!cleanTitle) {
         return NextResponse.json({ error: "Escribí un nombre para la meta" }, { status: 400 });
       }
-      if (target_date) {
+      let cleanTargetDate: string | null = null;
+      if (target_date !== undefined && target_date !== null && target_date !== "") {
         const parsedDate = typeof target_date === "string" ? new Date(`${target_date}T12:00:00.000Z`) : null;
         const isValidDate = parsedDate && !Number.isNaN(parsedDate.getTime()) && parsedDate.toISOString().slice(0, 10) === target_date;
-        if (!isValidDate || target_date < getParaguayDateString()) {
+        if (!isValidDate || typeof target_date !== "string" || target_date < getParaguayDateString()) {
           return NextResponse.json({ error: "La fecha debe ser válida, hoy o una fecha futura" }, { status: 400 });
         }
+        cleanTargetDate = target_date;
       }
       const cleanPartner = String(partner_name || "Mi pareja").trim().slice(0, 100);
       const cleanCreator = String(user.name || "Vos").trim().slice(0, 100);
@@ -141,7 +155,7 @@ export async function POST(req: Request) {
         await db.execute(
           `INSERT INTO couples_goals (title, category, target_amount, current_amount, target_date, invite_code, partner_name, creator_name, status, user_id)
            VALUES (?, ?, ?, 0, ?, ?, ?, ?, 'active', ?)`,
-          [cleanTitle, cleanCat, numTarget, target_date || null, randomCode, cleanPartner, cleanCreator, user.id]
+          [cleanTitle, cleanCat, numTarget, cleanTargetDate, randomCode, cleanPartner, cleanCreator, user.id]
         );
         return db.queryOne("SELECT * FROM couples_goals WHERE invite_code = ? AND user_id = ?", [randomCode, user.id]);
       });
@@ -194,8 +208,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true, goalId: joinedGoal.goalId });
     } else if (action === "contribute") {
       const { goal_id, amount, note } = body;
+      const goalId = Number(goal_id);
       const numAmount = Number(amount);
-      if (!goal_id || !Number.isFinite(numAmount) || numAmount <= 0 || numAmount > 1_000_000_000_000) {
+      if (!Number.isSafeInteger(goalId) || goalId <= 0 || !Number.isFinite(numAmount) || numAmount <= 0 || numAmount > 1_000_000_000_000) {
         return NextResponse.json({ error: "Datos de aporte inválidos" }, { status: 400 });
       }
 
@@ -204,7 +219,7 @@ export async function POST(req: Request) {
       const updatedGoal = await db.withTransaction(async () => {
         const ownedGoal = await db.queryOne<{ id: number; user_id: number; partner_user_id: number | null; creator_name: string | null; partner_name: string | null }>(
           "SELECT id, user_id, partner_user_id, creator_name, partner_name FROM couples_goals WHERE id = ? AND status = 'active' AND (user_id = ? OR partner_user_id = ?) FOR UPDATE",
-          [goal_id, user.id, user.id]
+          [goalId, user.id, user.id]
         );
         if (!ownedGoal) return null;
         const contributorName = Number(ownedGoal.user_id) === user.id
@@ -213,13 +228,13 @@ export async function POST(req: Request) {
         await db.execute(
           `INSERT INTO couples_contributions (goal_id, contributor_name, contributor_user_id, amount, note, date)
            VALUES (?, ?, ?, ?, ?, ?)`,
-          [goal_id, contributorName, user.id, numAmount, cleanNote, getParaguayDateString()]
+          [goalId, contributorName, user.id, numAmount, cleanNote, getParaguayDateString()]
         );
         await db.execute(
           "UPDATE couples_goals SET current_amount = current_amount + ? WHERE id = ? AND status = 'active'",
-          [numAmount, goal_id]
+          [numAmount, goalId]
         );
-        return db.queryOne("SELECT * FROM couples_goals WHERE id = ?", [goal_id]);
+        return db.queryOne("SELECT * FROM couples_goals WHERE id = ?", [goalId]);
       });
       if (!updatedGoal) {
         return NextResponse.json({ error: "No encontramos una meta activa para esta cuenta" }, { status: 404 });
@@ -242,6 +257,8 @@ export async function DELETE(req: Request) {
   if (!user) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
+  const limited = await enforceUserMutationRateLimit(req, user.id, "couples-write", 60);
+  if (limited) return limited;
 
   try {
     const { searchParams } = new URL(req.url);

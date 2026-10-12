@@ -74,9 +74,18 @@ export default function StreaksTab({ userId, active = true }: StreaksTabProps) {
     if (showLoading) setLoading(true);
     setLoadError("");
     try {
-      const nextData = force
+      let nextData = force
         ? await refreshSectionData<StreaksData>("/api/streaks", userId)
         : await getPrefetchedSectionData<StreaksData>("/api/streaks", userId);
+      if (!nextData.myFriendCode) {
+        const response = await fetch("/api/streaks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "initialize" }),
+        });
+        if (!response.ok) throw new Error(await readApiError(response, "No se pudo preparar tu código de Rachas."));
+        nextData = await refreshSectionData<StreaksData>("/api/streaks", userId);
+      }
       setData(nextData);
       setLeaderboardName(nextData.leaderboardName || "");
       hasLoadedOnce.current = true;

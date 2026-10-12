@@ -1,0 +1,8 @@
+[Unit]
+Description=Check Alpedo application and database readiness
+
+[Service]
+Type=oneshot
+User=ubuntu
+Environment=PM2_HOME=/home/ubuntu/.pm2
+ExecStart=/usr/bin/curl --fail --silent --show-error --max-time 10 --output /dev/null http://127.0.0.1:3001/api/health

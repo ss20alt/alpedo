@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
+import { readLimitedJsonObject } from "@/lib/request-validation";
+import { enforceUserMutationRateLimit } from "@/lib/security";
 import { getParaguayMonthString } from "@/lib/date-utils";
 
 interface ChallengeRow {
@@ -61,9 +63,19 @@ export async function GET() {
 export async function POST(req: Request) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const limited = await enforceUserMutationRateLimit(req, user.id, "challenge-write", 60);
+  if (limited) return limited;
 
   try {
-    const body = await req.json();
+    const parsedBody = await readLimitedJsonObject(req);
+    if (!parsedBody.ok) {
+      const tooLarge = parsedBody.reason === "too_large";
+      return NextResponse.json(
+        { error: tooLarge ? "La solicitud supera el tamaño permitido" : "Formato JSON inválido" },
+        { status: tooLarge ? 413 : 400 }
+      );
+    }
+    const body = parsedBody.value;
     const { action } = body;
     const challengeId = getChallengeId(user.id);
     const row = await db.queryOne<ChallengeRow>(

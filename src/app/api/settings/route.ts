@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
+import { readLimitedJsonObject } from "@/lib/request-validation";
 import type { DbParameter } from "@/lib/db";
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+import { enforceUserMutationRateLimit } from "@/lib/security";
 
 export async function GET() {
   const user = await getCurrentUser();
@@ -51,13 +49,19 @@ export async function POST(req: Request) {
   if (!user) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
+  const limited = await enforceUserMutationRateLimit(req, user.id, "settings-write");
+  if (limited) return limited;
 
   try {
-    const parsedBody: unknown = await req.json();
-    if (!isRecord(parsedBody)) {
-      return NextResponse.json({ error: "Formato JSON inválido" }, { status: 400 });
+    const parsedBody = await readLimitedJsonObject(req);
+    if (!parsedBody.ok) {
+      const tooLarge = parsedBody.reason === "too_large";
+      return NextResponse.json(
+        { error: tooLarge ? "La solicitud supera el tamaño permitido" : "Formato JSON inválido" },
+        { status: tooLarge ? 413 : 400 }
+      );
     }
-    const body = parsedBody;
+    const body = parsedBody.value;
     if ((body.currency_code !== undefined && body.currency_code !== "PYG") ||
         (body.currency_symbol !== undefined && body.currency_symbol !== "₲")) {
       return NextResponse.json({ error: "Por ahora solo se admiten importes en guaraníes" }, { status: 400 });

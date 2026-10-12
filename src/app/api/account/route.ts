@@ -6,22 +6,24 @@ import {
   getCurrentUser,
   recordAuthLoginFailure,
 } from "@/lib/auth";
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+import { readLimitedJsonObject } from "@/lib/request-validation";
+import { enforceUserMutationRateLimit } from "@/lib/security";
 
 export async function DELETE(req: Request) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const limited = await enforceUserMutationRateLimit(req, user.id, "account-delete", 10);
+  if (limited) return limited;
 
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Formato JSON inválido" }, { status: 400 });
+  const parsedBody = await readLimitedJsonObject(req);
+  if (!parsedBody.ok) {
+    const tooLarge = parsedBody.reason === "too_large";
+    return NextResponse.json(
+      { error: tooLarge ? "La solicitud supera el tamaño permitido" : "Formato JSON inválido" },
+      { status: tooLarge ? 413 : 400 }
+    );
   }
-  if (!isRecord(body)) return NextResponse.json({ error: "Formato JSON inválido" }, { status: 400 });
+  const body = parsedBody.value;
 
   const pin = typeof body.pin === "string" ? body.pin : "";
   const email = typeof body.email === "string" ? body.email.trim() : "";

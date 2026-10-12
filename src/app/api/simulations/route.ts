@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
+import { readLimitedJsonObject } from "@/lib/request-validation";
 import crypto from "crypto";
+import { enforceUserMutationRateLimit } from "@/lib/security";
 
 const MAX_AMOUNT = 9_999_999_999_999;
 const MAX_INSTALLMENTS = 120;
@@ -29,18 +31,19 @@ export async function POST(req: Request) {
   if (!user) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
+  const limited = await enforceUserMutationRateLimit(req, user.id, "simulations-write", 60);
+  if (limited) return limited;
 
   try {
-    let body: unknown;
-    try {
-      body = await req.json();
-    } catch {
-      return NextResponse.json({ error: "El contenido enviado no es JSON válido" }, { status: 400 });
+    const parsedBody = await readLimitedJsonObject(req);
+    if (!parsedBody.ok) {
+      const tooLarge = parsedBody.reason === "too_large";
+      return NextResponse.json(
+        { error: tooLarge ? "La solicitud supera el tamaño permitido" : "El contenido enviado no es JSON válido" },
+        { status: tooLarge ? 413 : 400 }
+      );
     }
-    if (!body || typeof body !== "object" || Array.isArray(body)) {
-      return NextResponse.json({ error: "Datos de simulación inválidos" }, { status: 400 });
-    }
-    const { title, amount, installments, monthly_payment, interest_rate, total_payment, notes } = body as Record<string, unknown>;
+    const { title, amount, installments, monthly_payment, interest_rate, total_payment, notes } = parsedBody.value;
     const cleanTitle = typeof title === "string" ? title.trim() : "";
     const numAmount = Number(amount);
     const numInst = Number(installments);
@@ -94,6 +97,8 @@ export async function DELETE(req: Request) {
   if (!user) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
+  const limited = await enforceUserMutationRateLimit(req, user.id, "simulations-write", 60);
+  if (limited) return limited;
 
   try {
     const { searchParams } = new URL(req.url);

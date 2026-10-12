@@ -3,12 +3,16 @@ import { getParaguayDateString } from "@/lib/date-utils";
 import db from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import crypto from "node:crypto";
+import { readLimitedJsonObject } from "@/lib/request-validation";
+import { enforceUserMutationRateLimit, rateLimitResponse, scopedRateLimitResponse } from "@/lib/security";
 
 export async function GET() {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
+  const limited = await rateLimitResponse(`backup-export:user:${user.id}`, 6, 60 * 60, "backup-export");
+  if (limited) return limited;
 
   try {
     const transactions = await db.query(
@@ -62,24 +66,27 @@ export async function POST(req: Request) {
   if (!user) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
+  const writeLimited = await enforceUserMutationRateLimit(req, user.id, "backup-write", 20);
+  if (writeLimited) return writeLimited;
+  const restoreLimited = await scopedRateLimitResponse(req, {
+    scope: "backup-restore",
+    identity: String(user.id),
+    identityMaximum: 3,
+    windowSeconds: 60 * 60,
+    ipMaximum: 10,
+  });
+  if (restoreLimited) return restoreLimited;
 
   try {
-    const contentLength = Number(req.headers.get("content-length") || 0);
-    if (contentLength > 2_000_000) {
-      return NextResponse.json({ error: "El respaldo supera 2 MB" }, { status: 413 });
+    const parsedBody = await readLimitedJsonObject(req, 2_000_000);
+    if (!parsedBody.ok) {
+      const tooLarge = parsedBody.reason === "too_large";
+      return NextResponse.json(
+        { error: tooLarge ? "El respaldo supera 2 MB" : "El respaldo no es JSON válido" },
+        { status: tooLarge ? 413 : 400 }
+      );
     }
-    const raw = await req.text();
-    if (raw.length > 2_000_000) {
-      return NextResponse.json({ error: "El respaldo supera 2 MB" }, { status: 413 });
-    }
-    let data: Record<string, unknown>;
-    try {
-      const parsed: unknown = JSON.parse(raw);
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("invalid");
-      data = parsed as Record<string, unknown>;
-    } catch {
-      return NextResponse.json({ error: "El respaldo no es JSON válido" }, { status: 400 });
-    }
+    const data = parsedBody.value;
     if (!data || !Array.isArray(data.transactions) || data.transactions.length > 5000) {
       return NextResponse.json({ error: "Formato de respaldo inválido" }, { status: 400 });
     }

@@ -13,39 +13,8 @@ import {
   recordAuthLoginFailure,
   clearAuthLoginFailures,
 } from "@/lib/auth";
-
-const MAX_AUTH_REQUEST_BYTES = 8 * 1024;
-
-async function readLimitedJson(req: Request): Promise<
-  { ok: true; value: unknown } | { ok: false; tooLarge?: boolean }
-> {
-  const contentLength = Number(req.headers.get("content-length") || 0);
-  if (Number.isFinite(contentLength) && contentLength > MAX_AUTH_REQUEST_BYTES) {
-    return { ok: false, tooLarge: true };
-  }
-
-  const reader = req.body?.getReader();
-  if (!reader) return { ok: false };
-  const decoder = new TextDecoder();
-  let body = "";
-  let bytesRead = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    bytesRead += value.byteLength;
-    if (bytesRead > MAX_AUTH_REQUEST_BYTES) {
-      await reader.cancel();
-      return { ok: false, tooLarge: true };
-    }
-    body += decoder.decode(value, { stream: true });
-  }
-  body += decoder.decode();
-  try {
-    return { ok: true, value: JSON.parse(body) as unknown };
-  } catch {
-    return { ok: false };
-  }
-}
+import { readLimitedJsonObject } from "@/lib/request-validation";
+import { clientRateLimitKey, rateLimitResponse, scopedRateLimitResponse } from "@/lib/security";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -72,12 +41,19 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const parsedRequest = await readLimitedJson(req);
-    if (!parsedRequest.ok && parsedRequest.tooLarge) {
-      return NextResponse.json({ error: "La solicitud supera el tamaño permitido" }, { status: 413 });
+    const ipKey = clientRateLimitKey(req, "auth");
+    if (ipKey) {
+      const limited = await rateLimitResponse(ipKey, 40, 60, "auth");
+      if (limited) return limited;
     }
+
+    const parsedRequest = await readLimitedJsonObject(req, 8 * 1024);
     if (!parsedRequest.ok) {
-      return NextResponse.json({ error: "Formato JSON inválido" }, { status: 400 });
+      const tooLarge = parsedRequest.reason === "too_large";
+      return NextResponse.json(
+        { error: tooLarge ? "La solicitud supera el tamaño permitido" : "Formato JSON inválido" },
+        { status: tooLarge ? 413 : 400 }
+      );
     }
     const parsedBody = parsedRequest.value;
 
@@ -92,6 +68,26 @@ export async function POST(req: Request) {
     const oldPin = typeof body.oldPin === "string" ? body.oldPin : "";
     const newPin = typeof body.newPin === "string" ? body.newPin : "";
     const clientKey = email.trim().toLowerCase();
+    if (action === "register" && clientKey) {
+      const limited = await scopedRateLimitResponse(req, {
+        scope: "auth-register",
+        identity: clientKey,
+        identityMaximum: 3,
+        windowSeconds: 60 * 60,
+        ipMaximum: 10,
+      });
+      if (limited) return limited;
+    }
+    if (action === "login" || action === "reset_pin") {
+      const limited = await scopedRateLimitResponse(req, {
+        scope: `auth-${action}`,
+        identity: clientKey,
+        identityMaximum: action === "login" ? 10 : 5,
+        windowSeconds: action === "login" ? 15 * 60 : 60 * 60,
+        ipMaximum: action === "login" ? 50 : 20,
+      });
+      if (limited) return limited;
+    }
     if (action === "login" || action === "reset_pin") {
       if (!clientKey || clientKey.length > 255 || (action === "login" && !pin)) {
         return NextResponse.json({ error: "Ingresá el correo de tu cuenta" }, { status: 400 });
@@ -108,6 +104,13 @@ export async function POST(req: Request) {
     if (action === "create_recovery_code") {
       const user = await getCurrentUser();
       if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+      const limited = await scopedRateLimitResponse(req, {
+        scope: "auth-recovery-code",
+        identity: String(user.id),
+        identityMaximum: 4,
+        windowSeconds: 60 * 60,
+      });
+      if (limited) return limited;
       const recoveryKey = user.email.toLowerCase();
       if (await getAuthLoginWaitSeconds(recoveryKey)) {
         return NextResponse.json({ error: "Demasiados intentos. Intentá más tarde." }, { status: 429 });
@@ -207,6 +210,13 @@ export async function POST(req: Request) {
       if (!user) {
         return NextResponse.json({ error: "No autorizado" }, { status: 401 });
       }
+      const limited = await scopedRateLimitResponse(req, {
+        scope: "auth-change-pin",
+        identity: String(user.id),
+        identityMaximum: 5,
+        windowSeconds: 60 * 60,
+      });
+      if (limited) return limited;
       if (!/^\d{6,12}$/.test(newPin)) {
         return NextResponse.json({ error: "El nuevo PIN debe tener entre 6 y 12 números" }, { status: 400 });
       }
