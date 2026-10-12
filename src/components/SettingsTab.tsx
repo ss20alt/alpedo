@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { triggerHaptic } from "@/lib/haptics";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import AccountDeletionDialog from "@/components/AccountDeletionDialog";
 import { percentile75, readPerformanceSamples, type PerformanceSamples } from "@/lib/performance";
 
 interface SettingsTabProps {
@@ -55,6 +56,7 @@ export default function SettingsTab({
   const [clearing, setClearing] = useState(false);
   const [clearSuccess, setClearSuccess] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [confirmDeleteAccount, setConfirmDeleteAccount] = useState(false);
   const [backupNotice, setBackupNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [pendingBackup, setPendingBackup] = useState<{ name: string; data: Record<string, unknown>; details: string } | null>(null);
   const [restoringBackup, setRestoringBackup] = useState(false);
@@ -476,6 +478,18 @@ export default function SettingsTab({
 
       </div>
 
+      {currentUser && <section aria-labelledby="delete-account-heading" className="rounded-[28px] border border-rose-200 bg-white p-4 shadow-[0_4px_24px_rgba(190,18,60,0.04)] text-slate-900 sm:p-6 md:col-span-2">
+        <h3 id="delete-account-heading" className="flex items-center gap-2 text-sm font-black text-rose-800">
+          <Trash2 className="h-4 w-4" /> Eliminar cuenta
+        </h3>
+        <p className="mt-2 max-w-2xl text-xs leading-relaxed text-slate-600">
+          Borrá permanentemente tu perfil y sus datos. Antes podés descargar un respaldo completo desde «Respaldo & Portabilidad».
+        </p>
+        <button type="button" onClick={() => setConfirmDeleteAccount(true)} className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 text-xs font-black text-rose-800 transition hover:bg-rose-100 active:scale-[0.99] sm:w-auto">
+          <Trash2 className="h-4 w-4" /> Eliminar mi cuenta y mis datos
+        </button>
+      </section>}
+
       {/* 5. Guía Interactiva & Tour del Sistema */}
       <div className="rounded-[28px] border border-slate-200 bg-white p-4 sm:p-6 text-slate-900 md:col-span-2">
         <h3 className="text-sm font-black">Rendimiento en este dispositivo</h3>
@@ -520,6 +534,7 @@ export default function SettingsTab({
         </div>
       </div>
       {confirmClear && <ConfirmDialog title="¿Eliminar todos los movimientos?" description="Se borrarán los gastos e ingresos de esta cuenta. Esta acción no se puede deshacer. Descargá un respaldo antes si querés conservarlos." confirmLabel="Eliminar" destructive busy={clearing} onCancel={() => setConfirmClear(false)} onConfirm={() => void handleClearAllTransactions()} />}
+      {confirmDeleteAccount && currentUser && <AccountDeletionDialog email={currentUser.email} userId={currentUser.id} onCancel={() => setConfirmDeleteAccount(false)} onComplete={() => { setConfirmDeleteAccount(false); void onLogout(); }} />}
       {pendingBackup && <ConfirmDialog title="Restaurar respaldo" description={`Archivo: ${pendingBackup.name}. Contiene ${pendingBackup.details}. Puede actualizar datos que ya existen en esta cuenta. Los movimientos de otra cuenta se reasignarán cuando sea posible. Revisá que sea el archivo correcto antes de continuar.`} confirmLabel="Restaurar" busy={restoringBackup} onCancel={() => { if (!restoringBackup) setPendingBackup(null); }} onConfirm={() => void handleConfirmBackup()} />}
     </div>
   );

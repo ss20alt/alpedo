@@ -37,6 +37,7 @@ El archivo `.env.local` sirve para desarrollo local y nunca debe subirse al repo
 - Rotá la contraseña de PostgreSQL que estuvo en el código publicado y actualizá `DATABASE_URL` en todos los procesos. Quitarla del código actual no elimina el historial de Git.
 - Cambiá el PIN de cualquier cuenta de demostración existente. La instalación nueva ya no crea una cuenta ni movimientos de ejemplo.
 - Probá registro, inicio/cierre de sesión, cambio de PIN, creación/edición/borrado de movimientos y restauración de un respaldo en una base de ensayo.
+- Probá la eliminación permanente de cuenta en una base de ensayo siguiendo [docs/ELIMINACION_CUENTA.md](docs/ELIMINACION_CUENTA.md). No uses una cuenta real para esa prueba; la operación no se puede revertir.
 - Hacé respaldo de PostgreSQL y ensayá la restauración. El JSON descargable complementa el respaldo de base de datos.
 - Revisá las limitaciones de la versión antes de lanzar: las rachas cuentan días desde el último gasto registrado y el simulador de préstamos no incluye seguros ni comisiones. El ranking de rachas es voluntario: solo publica el apodo elegido y los días de racha.
 

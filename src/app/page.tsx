@@ -350,17 +350,17 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "logout" }),
       });
-      dataRequestId.current += 1;
-      dataAbortController.current?.abort();
-      setIsAuthenticated(false);
-      setCurrentUser(null);
-      setMetrics(null);
-      setTransactions([]);
-      setTransactionCount(0);
-      setPrivacyMode(false);
     } catch {
       // ignore
     }
+    dataRequestId.current += 1;
+    dataAbortController.current?.abort();
+    setIsAuthenticated(false);
+    setCurrentUser(null);
+    setMetrics(null);
+    setTransactions([]);
+    setTransactionCount(0);
+    setPrivacyMode(false);
   };
 
   const handleDeleteTransaction = async (id: string) => {

@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "test": "node --test tests/*.test.mjs",
+    "test:account-deletion": "node scripts/test-account-deletion.cjs",
     "lint": "eslint src"
   },
   "dependencies": {

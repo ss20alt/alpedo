@@ -174,6 +174,77 @@ export async function changePinForUser(user: User, oldPin: string, newPin: strin
   return true;
 }
 
+/** Permanently removes one account and its private data after PIN verification. */
+export async function deleteAccountWithPin(userId: number, currentPin: string): Promise<boolean> {
+  if (!Number.isInteger(userId) || userId < 1 || !/^\d{6,12}$/.test(currentPin)) return false;
+  await ensureSessionsTable();
+  await ensureRecoveryTable();
+
+  return db.withTransaction(async () => {
+    const user = await db.queryOne<User>("SELECT * FROM users WHERE id = ? FOR UPDATE", [userId]);
+    if (!user || !pinMatches(currentPin, user.pin_hash)) return false;
+
+    const friendCodeKey = userId === 1 ? "my_friend_code" : `my_friend_code_${userId}`;
+    const friendCode = await db.queryOne<{ value: string }>(
+      "SELECT value FROM settings WHERE key = ?",
+      [friendCodeKey]
+    );
+
+    // Remove references to this participant while preserving other users' own data.
+    if (friendCode?.value) {
+      await db.execute("DELETE FROM friend_streaks WHERE friend_code = ?", [friendCode.value]);
+    }
+    await db.execute("DELETE FROM friend_streaks WHERE user_id = ?", [userId]);
+    await db.execute("DELETE FROM streak_leaderboard_optins WHERE user_id = ?", [userId]);
+
+    // A goal owned by this account (and its full contribution history) is deleted.
+    await db.execute(
+      "DELETE FROM couples_contributions WHERE goal_id IN (SELECT id FROM couples_goals WHERE user_id = ?)",
+      [userId]
+    );
+    await db.execute("DELETE FROM couples_goals WHERE user_id = ?", [userId]);
+    // Preserve another person's goal and total, but detach and anonymize this participant.
+    await db.execute(
+      "UPDATE couples_contributions SET contributor_user_id = NULL, contributor_name = 'Cuenta eliminada' WHERE contributor_user_id = ?",
+      [userId]
+    );
+    await db.execute(
+      "UPDATE couples_goals SET partner_user_id = NULL, partner_name = NULL WHERE partner_user_id = ?",
+      [userId]
+    );
+
+    await db.execute("DELETE FROM transactions WHERE user_id = ? OR (user_id IS NULL AND ? = 1)", [userId, userId]);
+    await db.execute("DELETE FROM loan_simulations WHERE user_id = ?", [userId]);
+    await db.execute("DELETE FROM savings_challenge WHERE user_id = ?", [userId]);
+    await db.execute("DELETE FROM auth_sessions WHERE user_id = ?", [userId]);
+    await db.execute("DELETE FROM auth_recovery_codes WHERE user_id = ?", [userId]);
+    await db.execute("DELETE FROM auth_login_limits WHERE LOWER(email) = LOWER(?)", [user.email]);
+
+    const accountKeys = [
+      friendCodeKey,
+      `streak_tracking_start_${userId}`,
+      `my_friend_code_${userId}`,
+    ];
+    if (userId === 1) {
+      accountKeys.push(
+        "budget_al_pedo_limit",
+        "budget_variable_limit",
+        "emergency_fund_saved",
+        "account_bank",
+        "account_type",
+        "account_last4",
+        "account_base_balance",
+      );
+    }
+    await db.execute(
+      `DELETE FROM settings WHERE key IN (${accountKeys.map(() => "?").join(", ")})`,
+      accountKeys
+    );
+
+    return (await db.execute("DELETE FROM users WHERE id = ?", [userId])) === 1;
+  });
+}
+
 export async function isAuthenticated(): Promise<boolean> { return (await getCurrentUser()) !== null; }
 export async function checkAuth(): Promise<boolean> { return (await getCurrentUser()) !== null; }
 
