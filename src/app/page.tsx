@@ -131,7 +131,7 @@ export default function Home() {
     setCurrentTabState(tab);
   };
   const navTabClass = (tab: TourStep["targetTab"]) =>
-    `min-h-10 shrink-0 rounded-full border px-4 py-1.5 text-xs font-bold transition-[background-color,border-color,box-shadow,color,transform] duration-200 ease-out active:scale-[0.97] ${
+    `min-h-10 shrink-0 rounded-full border px-2.5 py-1.5 text-xs font-bold transition-[background-color,border-color,box-shadow,color,transform] duration-200 ease-out active:scale-[0.97] sm:px-4 ${
       currentTab === tab
         ? "border-white/40 bg-white/15 text-white shadow-[0_2px_8px_rgba(0,0,0,0.08)]"
         : "border-transparent text-white/80 hover:border-white/10 hover:bg-white/10 hover:text-white"
@@ -503,8 +503,8 @@ export default function Home() {
   return (
     <div className="app-viewport bg-[#EEF2F8] text-slate-900 flex flex-col font-sans selection:bg-blue-600 selection:text-white">
       {/* Alpedo app header */}
-      <header className="sticky top-0 z-30 bg-gradient-to-b from-[#1252c8] via-[#165bd2] to-[#1b61d7] text-white pt-safe shadow-[0_2px_10px_rgba(15,23,42,0.10)] pb-2.5">
-        <div className="mx-auto flex max-w-lg sm:max-w-2xl md:max-w-4xl items-center justify-between px-4 sm:px-6 pt-1.5 pb-2">
+      <header className="sticky top-0 z-30 bg-gradient-to-b from-[#1252c8] via-[#165bd2] to-[#1b61d7] text-white pt-safe shadow-[0_2px_10px_rgba(15,23,42,0.10)] pb-1.5 sm:pb-2.5">
+        <div className="mx-auto flex max-w-lg sm:max-w-2xl md:max-w-4xl items-center justify-between px-3 sm:px-6 pt-0.5 pb-0.5 sm:pt-1.5 sm:pb-2">
           {/* Left: User Avatar & Settings Trigger */}
           <button
             onClick={() => {
@@ -586,14 +586,14 @@ export default function Home() {
         </div>
 
         {/* Main sections and month selector */}
-        <div className="mx-auto max-w-lg sm:max-w-2xl md:max-w-4xl px-3 sm:px-6 pt-0.5">
-          <div className="flex items-center gap-2 py-1">
+        <div className="mx-auto max-w-lg sm:max-w-2xl md:max-w-4xl px-3 sm:px-6 pt-0 sm:pt-0.5">
+          <div className="flex items-center gap-1.5 py-0.5 sm:gap-2 sm:py-1">
             {/* Horizontal pill navigation */}
             <nav aria-label="Secciones principales" className="relative min-w-0 flex-1">
               <div
                 ref={tabsContainerRef}
                 onScroll={updateTabScrollEdges}
-                className="flex items-center gap-1.5 overflow-x-auto overscroll-x-contain no-scrollbar scroll-smooth py-0.5 pr-5"
+                className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto overscroll-x-contain no-scrollbar scroll-smooth py-0.5 pr-5"
               >
                 <button
                   data-tab="dashboard"
@@ -679,7 +679,7 @@ export default function Home() {
                 }}
                 aria-label="Mes de movimientos"
                 title="Elegir mes"
-                className="h-10 w-24 appearance-none rounded-full border border-white/25 bg-white/10 pl-8 pr-2 text-xs font-bold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 cursor-pointer hover:bg-white/20 transition-colors duration-200"
+                className="h-10 w-[5.5rem] appearance-none rounded-full border border-white/30 bg-white/10 pl-7 pr-1.5 text-[11px] font-bold text-white shadow-sm shadow-blue-950/10 transition-[background-color,border-color,box-shadow,transform] duration-200 ease-out hover:border-white/45 hover:bg-white/20 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 cursor-pointer"
               >
                 <option value={currentMonth} className="text-slate-900 bg-white">
                   {formatParaguayMonthLabel(currentMonth)}
@@ -693,7 +693,7 @@ export default function Home() {
                   ))}
                 <option value="all" className="text-slate-900 bg-white">Todos</option>
               </select>
-              <Calendar aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/85" />
+              <Calendar aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/85" />
             </div>
           </div>
         </div>
