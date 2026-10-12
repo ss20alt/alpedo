@@ -46,16 +46,16 @@ function prefetchSectionModule(tab: PrefetchableTab) {
   if (tab === "settings") void import("@/components/SettingsTab");
 }
 
-const sectionLoading = () => <SectionSkeleton label="Preparando sección" />;
-const TransactionModal = dynamic(() => import("@/components/TransactionModal"), { loading: sectionLoading });
-const LoanSimulator = dynamic(() => import("@/components/LoanSimulator"), { loading: sectionLoading });
-const TransactionsList = dynamic(() => import("@/components/TransactionsList"), { loading: sectionLoading });
-const SettingsTab = dynamic(() => import("@/components/SettingsTab"), { loading: sectionLoading });
-const ChallengeTab = dynamic(() => import("@/components/ChallengeTab"), { loading: sectionLoading });
-const CueroModal = dynamic(() => import("@/components/CueroModal"), { loading: sectionLoading });
-const CouplesTab = dynamic(() => import("@/components/CouplesTab"), { loading: sectionLoading });
-const StreaksTab = dynamic(() => import("@/components/StreaksTab"), { loading: sectionLoading });
-const InteractiveTour = dynamic(() => import("@/components/InteractiveTour"), { loading: sectionLoading });
+const sectionLoading = (label: string) => () => <SectionSkeleton label={label} />;
+const TransactionModal = dynamic(() => import("@/components/TransactionModal"), { loading: sectionLoading("Abriendo el formulario de movimiento") });
+const LoanSimulator = dynamic(() => import("@/components/LoanSimulator"), { loading: sectionLoading("Preparando el simulador de préstamos") });
+const TransactionsList = dynamic(() => import("@/components/TransactionsList"), { loading: sectionLoading("Preparando movimientos y comercios") });
+const SettingsTab = dynamic(() => import("@/components/SettingsTab"), { loading: sectionLoading("Preparando herramientas y ajustes") });
+const ChallengeTab = dynamic(() => import("@/components/ChallengeTab"), { loading: sectionLoading("Preparando el reto de ahorro") });
+const CueroModal = dynamic(() => import("@/components/CueroModal"), { loading: sectionLoading("Abriendo la consulta de Kape") });
+const CouplesTab = dynamic(() => import("@/components/CouplesTab"), { loading: sectionLoading("Preparando metas compartidas") });
+const StreaksTab = dynamic(() => import("@/components/StreaksTab"), { loading: sectionLoading("Preparando Rachas") });
+const InteractiveTour = dynamic(() => import("@/components/InteractiveTour"), { loading: sectionLoading("Preparando la guía de la app") });
 
 function PrivateSection() {
   return (
@@ -196,6 +196,16 @@ export default function Home() {
     setTabpcrollEdges((current) =>
       current.left === next.left && current.right === next.right ? current : next,
     );
+  }, []);
+
+  const scrollSectionTabs = useCallback((direction: -1 | 1) => {
+    const element = tabsContainerRef.current;
+    if (!element) return;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    element.scrollBy({
+      left: direction * Math.max(120, element.clientWidth * 0.7),
+      behavior: reducedMotion ? "instant" : "smooth",
+    });
   }, []);
 
   // Native Pull-to-Refresh state
@@ -659,6 +669,7 @@ export default function Home() {
                   aria-current={currentTab === "transactions" ? "page" : undefined}
                   onClick={() => setCurrentTab("transactions")}
                   onPointerEnter={() => prefetchSectionModule("transactions")}
+                  onPointerDown={() => prefetchSectionModule("transactions")}
                   onFocus={() => prefetchSectionModule("transactions")}
                   className={navTabClass("transactions")}
                 >
@@ -669,6 +680,7 @@ export default function Home() {
                   aria-current={currentTab === "grouped" ? "page" : undefined}
                   onClick={() => setCurrentTab("grouped")}
                   onPointerEnter={() => prefetchSectionModule("grouped")}
+                  onPointerDown={() => prefetchSectionModule("grouped")}
                   onFocus={() => prefetchSectionModule("grouped")}
                   className={navTabClass("grouped")}
                 >
@@ -679,6 +691,7 @@ export default function Home() {
                   aria-current={currentTab === "couples" ? "page" : undefined}
                   onClick={() => setCurrentTab("couples")}
                   onPointerEnter={() => prefetchSectionModule("couples")}
+                  onPointerDown={() => prefetchSectionModule("couples")}
                   onFocus={() => prefetchSectionModule("couples")}
                   className={navTabClass("couples")}
                 >
@@ -690,6 +703,7 @@ export default function Home() {
                   onClick={() => setCurrentTab("challenge")}
                   className={navTabClass("challenge")}
                   onPointerEnter={() => prefetchSectionModule("challenge")}
+                  onPointerDown={() => prefetchSectionModule("challenge")}
                   onFocus={() => prefetchSectionModule("challenge")}
                 >
                   Reto 1%
@@ -700,6 +714,7 @@ export default function Home() {
                   onClick={() => setCurrentTab("streaks")}
                   className={navTabClass("streaks")}
                   onPointerEnter={() => prefetchSectionModule("streaks")}
+                  onPointerDown={() => prefetchSectionModule("streaks")}
                   onFocus={() => prefetchSectionModule("streaks")}
                 >
                   Rachas
@@ -709,6 +724,7 @@ export default function Home() {
                   aria-current={currentTab === "loans" ? "page" : undefined}
                   onClick={() => setCurrentTab("loans")}
                   onPointerEnter={() => prefetchSectionModule("loans")}
+                  onPointerDown={() => prefetchSectionModule("loans")}
                   onFocus={() => prefetchSectionModule("loans")}
                   className={navTabClass("loans")}
                 >
@@ -716,18 +732,30 @@ export default function Home() {
                 </button>
               </div>
               {tabScrollEdges.left && (
-                <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-0 flex w-4 items-center justify-start bg-gradient-to-r from-[#1C5FE6] to-transparent lg:hidden">
-                  <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-white/15">
-                    <ChevronLeft className="h-3 w-3 text-white/90" />
+                <button
+                  type="button"
+                  onClick={() => scrollSectionTabs(-1)}
+                  aria-label="Ver secciones anteriores"
+                  title="Ver secciones anteriores"
+                  className="group absolute inset-y-0 left-0 z-10 flex w-9 items-center justify-start bg-gradient-to-r from-[#1C5FE6] via-[#1C5FE6]/95 to-transparent pl-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-blue-600 lg:hidden"
+                >
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full border border-white/35 bg-white/25 text-white shadow-md backdrop-blur transition group-hover:bg-white/35">
+                    <ChevronLeft className="h-4 w-4" />
                   </span>
-                </div>
+                </button>
               )}
               {tabScrollEdges.right && (
-                <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-0 flex w-4 items-center justify-end bg-gradient-to-l from-[#1C5FE6] to-transparent lg:hidden">
-                  <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-white/15">
-                    <ChevronRight className="h-3 w-3 text-white/90" />
+                <button
+                  type="button"
+                  onClick={() => scrollSectionTabs(1)}
+                  aria-label="Ver más secciones"
+                  title="Ver más secciones"
+                  className="group absolute inset-y-0 right-0 z-10 flex w-9 items-center justify-end bg-gradient-to-l from-[#1C5FE6] via-[#1C5FE6]/95 to-transparent pr-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-blue-600 lg:hidden"
+                >
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full border border-white/35 bg-white/25 text-white shadow-md backdrop-blur transition group-hover:bg-white/35">
+                    <ChevronRight className="h-4 w-4" />
                   </span>
-                </div>
+                </button>
               )}
             </nav>
 
