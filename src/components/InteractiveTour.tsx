@@ -116,7 +116,7 @@ export const TOUR_STEPS: TourStep[] = [
     headline: "Ingresos menos gastos registrados",
     description:
       "El saldo se actualiza con los movimientos cargados. El gráfico muestra el gasto acumulado y el ritmo ideal del mes.",
-    tip: "Tocá una fecha del gráfico para ver cuánto gastaste ese día.",
+    tip: "Seleccioná una fecha del gráfico para ver cuánto gastaste ese día.",
     targetTab: "dashboard",
     targetSelector: "#tour-hero-card",
     spotlightPadding: 8,
@@ -172,8 +172,8 @@ export const TOUR_STEPS: TourStep[] = [
     icon: <Flame className="h-4 w-4 text-orange-500" />,
     headline: "Editá los movimientos que cargaste",
     description:
-      "Tocá Opciones en un movimiento para editar, marcar 'Al Pedo' o borrar. También podés deslizarlo hacia los lados.",
-    tip: "Podés usar las opciones del movimiento o deslizar la fila.",
+      "Usá Opciones en un movimiento para editar, marcar 'Al Pedo' o borrar. En móvil, también podés deslizarlo hacia los lados.",
+    tip: "Usá las opciones del movimiento; en móvil también podés deslizar la fila.",
     targetTab: "transactions",
     targetSelector: "#tour-transactions-list",
     spotlightPadding: 8,

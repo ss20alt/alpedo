@@ -321,7 +321,7 @@ export default function CouplesTab({ currencySymbol = "₲", userId, active = tr
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-4 px-1 pb-8 sm:space-y-6 sm:pb-12">
+    <div className="mx-auto max-w-4xl lg:max-w-[1600px] space-y-4 px-1 pb-8 sm:space-y-6 sm:pb-12">
       {loadError && hasLoadedOnce.current && (
         <div className="flex items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="status">
           <span>No se pudo actualizar la meta. Se muestra la última información cargada.</span>

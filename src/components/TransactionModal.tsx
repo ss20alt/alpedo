@@ -623,10 +623,10 @@ export default function TransactionModal({
               )}
 
               <div
-                className="mt-2 flex items-center gap-1.5 overflow-x-auto overscroll-x-contain no-scrollbar scroll-smooth pb-1"
+                className="mt-2 flex items-center gap-1.5 overflow-x-auto overscroll-x-contain no-scrollbar scroll-smooth pb-1 lg:w-full lg:flex-wrap lg:overflow-visible lg:pb-0"
                 aria-label="Sugerencias para el detalle"
               >
-                <span className="shrink-0 text-[11px] font-medium text-slate-400">
+                <span className="shrink-0 text-[11px] font-medium text-slate-400 lg:basis-full">
                   Sugerencias
                 </span>
                 {detailSuggestions.map((preset) => (
@@ -638,7 +638,7 @@ export default function TransactionModal({
                       triggerHaptic("light");
                       setDescription(preset);
                     }}
-                    className={`min-h-10 shrink-0 rounded-full px-3 py-1 text-xs font-medium transition active:scale-95 ${
+                    className={`min-h-10 shrink-0 rounded-full px-3 py-1 text-xs font-medium transition active:scale-95 lg:min-h-9 lg:px-2.5 ${
                       description === preset
                         ? "bg-blue-50 text-blue-700"
                         : "bg-slate-100/80 text-slate-600 hover:bg-slate-200/80"

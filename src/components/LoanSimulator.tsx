@@ -644,7 +644,7 @@ export default function LoanSimulator({ metrics, currencySymbol }: LoanSimulator
           onClick={() => void loadSaved()}
           className="min-h-11 rounded-xl border border-amber-200 bg-amber-50 px-4 text-left text-xs font-semibold text-amber-900"
         >
-          No se pudieron cargar tus simulaciones. Tocá para reintentar.
+          No se pudieron cargar tus simulaciones. Volvé a intentar para cargarlas.
         </button>
       )}
       {simulationToDelete && <ConfirmDialog title="¿Eliminar simulación?" description={`Se eliminará “${simulationToDelete.title}” de tus simulaciones guardadas.`} confirmLabel="Eliminar" destructive onCancel={() => setSimulationToDelete(null)} onConfirm={() => void handleDeleteSaved(simulationToDelete.id)} />}

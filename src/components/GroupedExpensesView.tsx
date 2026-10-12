@@ -449,8 +449,8 @@ export default function GroupedExpensesView({
 
       {/* List of Grouped Expenses */}
       {filteredGroups.length === 0 ? (
-        <div className="rounded-[28px] border border-slate-100 bg-white p-12 text-center shadow-sm">
-          <Layers className="h-10 w-10 text-slate-300 mx-auto mb-3" />
+        <div className="rounded-[28px] border border-slate-100 bg-white p-12 text-center shadow-sm lg:px-8 lg:py-8">
+          <Layers className="mx-auto mb-3 h-10 w-10 text-slate-300 lg:mb-2 lg:h-8 lg:w-8" />
           <p className="text-sm font-bold text-slate-900">
             {search.trim()
               ? `No encontramos gastos para “${search.trim()}”.`

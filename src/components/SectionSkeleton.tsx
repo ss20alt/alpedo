@@ -5,7 +5,7 @@ interface SectionSkeletonProps {
 export default function SectionSkeleton({ label }: SectionSkeletonProps) {
   return (
     <div
-      className="mx-auto max-w-4xl space-y-4 animate-pulse"
+      className="mx-auto max-w-4xl lg:max-w-[1600px] space-y-4 animate-pulse"
       role="status"
       aria-label={label}
       aria-busy="true"

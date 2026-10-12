@@ -287,15 +287,17 @@ export default function SettingsTab({
       </div>
 
       {/* 1. Moneda & Formato */}
-      <div className="app-mobile-surface rounded-[28px] border border-slate-100 bg-white p-4 sm:p-6 shadow-[0_4px_24px_rgba(0,0,0,0.03)] text-slate-900">
-        <h3 className="text-sm sm:text-base font-black text-slate-900 flex items-center gap-2 mb-1">
-          <Settings className="h-4 w-4 sm:h-5 sm:w-5 text-[#1656DB] shrink-0" />
-          <span>Formato de Moneda</span>
-        </h3>
-        <p className="text-[11px] sm:text-xs text-slate-500 font-medium mb-4 sm:mb-5">
-          Los movimientos se registran en guaraníes paraguayos. No se realiza conversión de monedas.
-        </p>
-        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-800">
+      <div className="app-mobile-surface rounded-[28px] border border-slate-100 bg-white p-4 sm:p-6 shadow-[0_4px_24px_rgba(0,0,0,0.03)] text-slate-900 md:col-span-2 md:flex md:items-center md:justify-between md:gap-6">
+        <div className="md:max-w-2xl">
+          <h3 className="text-sm sm:text-base font-black text-slate-900 flex items-center gap-2 mb-1">
+            <Settings className="h-4 w-4 sm:h-5 sm:w-5 text-[#1656DB] shrink-0" />
+            <span>Formato de Moneda</span>
+          </h3>
+          <p className="text-[11px] sm:text-xs text-slate-500 font-medium mb-4 sm:mb-5 md:mb-0">
+            Los movimientos se registran en guaraníes paraguayos. No se realiza conversión de monedas.
+          </p>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-800 md:min-w-[280px] md:text-center">
           ₲ Guaraní paraguayo · PYG
         </div>
       </div>

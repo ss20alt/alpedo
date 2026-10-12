@@ -249,7 +249,8 @@ export default function ExpenseDonutChart({
           </div>
 
           <span className="text-[10px] text-slate-500 mt-1">
-            Tocá un segmento para ver el detalle
+            <span className="md:hidden">Tocá un segmento para ver el detalle</span>
+            <span className="hidden md:inline">Seleccioná un segmento para ver el detalle</span>
           </span>
         </div>
 

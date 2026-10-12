@@ -551,6 +551,8 @@ export default function CopilotDashboard({
 
   return (
       <div className="space-y-4 pb-8 sm:space-y-5">
+      <div className="grid grid-cols-1 gap-4 sm:gap-5 xl:grid-cols-12">
+      <div className="xl:col-span-8">
       {/* 1. COPILOT HERO CARD: "₲ 287.000 restante de ₲ 1.095.000 presupuestado este mes" (Reference Image 1) */}
       <div id="tour-hero-card" className="app-mobile-surface relative rounded-[26px] sm:rounded-[32px] bg-white p-4 sm:p-6 shadow-[0_8px_30px_rgb(0,0,0,0.06)] border border-slate-100/90 overflow-hidden">
 
@@ -695,9 +697,14 @@ export default function CopilotDashboard({
               );
             })}
           </svg>
-          <p id="daily-spending-chart-hint" className="sr-only">Tocá o seleccioná una fecha para ver cuánto gastaste ese día. Con teclado, usá las flechas para cambiar de día.</p>
+          <p id="daily-spending-chart-hint" className="sr-only">Seleccioná una fecha para ver cuánto gastaste ese día. También podés usar las flechas del teclado para cambiar de día.</p>
         </div>
-        {!selectedPoint && <p className="-mt-1 text-center text-[9px] font-medium text-slate-400">Tocá la gráfica para ver cuánto gastaste cada día</p>}
+        {!selectedPoint && (
+          <p className="-mt-1 text-center text-[9px] font-medium text-slate-400">
+            <span className="md:hidden">Tocá la gráfica para ver cuánto gastaste cada día</span>
+            <span className="hidden md:inline">Seleccioná una fecha de la gráfica para ver cuánto gastaste ese día</span>
+          </p>
+        )}
 
         {/* Quick Health Summary Pill Tags (Image 1 footer) */}
         <div className="mt-3 grid grid-cols-3 gap-1 border-t border-slate-100 pt-3 text-[11px] sm:text-xs">
@@ -752,9 +759,11 @@ export default function CopilotDashboard({
           </div>
         </div>
       </div>
+      </div>
 
       {/* 1.25 SPENDING PACE GAUGE & QUICK SHARING (Copilot & YNAB Benchmark) */}
-      <div id="tour-spending-pace" className="app-mobile-surface rounded-[28px] bg-white p-4 sm:p-5 shadow-[0_4px_24px_rgba(0,0,0,0.04)] border border-slate-100">
+      <div className="xl:col-span-4 xl:flex xl:items-center">
+      <div id="tour-spending-pace" className="app-mobile-surface rounded-[28px] bg-white p-4 sm:p-5 shadow-[0_4px_24px_rgba(0,0,0,0.04)] border border-slate-100 xl:flex xl:flex-col xl:justify-center">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <div className={`h-8 w-8 rounded-xl flex items-center justify-center text-sm font-bold ${
@@ -837,6 +846,8 @@ export default function CopilotDashboard({
         </p>
 
       </div>
+      </div>
+      </div>
 
       {/* 1.5 NATIVE MOBILE SPEED DIAL: 1-Tap Daily Paraguayan Spends Carousel */}
       <div id="tour-quick-spend" className="space-y-1.5">
@@ -849,7 +860,7 @@ export default function CopilotDashboard({
           <span className="text-[10px] text-slate-400 font-bold">Frecuentes PY</span>
         </div>
 
-        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1 pt-0.5 select-none">
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1 pt-0.5 select-none lg:grid lg:grid-cols-6 lg:gap-3">
           <button
             onClick={() => {
               triggerHaptic("medium");
@@ -859,7 +870,7 @@ export default function CopilotDashboard({
                 onAddNew();
               }
             }}
-            className="flex items-center gap-2 rounded-2xl bg-white border border-slate-200/80 px-3.5 py-2.5 shadow-sm hover:border-blue-400 hover:shadow-md transition active:scale-95 shrink-0 group"
+            className="flex items-center justify-center gap-2 rounded-2xl bg-white border border-slate-200/80 px-3.5 py-2.5 shadow-sm hover:border-blue-400 hover:shadow-md transition active:scale-95 shrink-0 group"
           >
             <FinanceIcon name="car" className="h-4 w-4 text-slate-600 transition-transform group-hover:scale-110" />
             <div className="text-left">
@@ -877,7 +888,7 @@ export default function CopilotDashboard({
                 onAddNew();
               }
             }}
-            className="flex items-center gap-2 rounded-2xl bg-white border border-slate-200/80 px-3.5 py-2.5 shadow-sm hover:border-emerald-400 hover:shadow-md transition active:scale-95 shrink-0 group"
+            className="flex items-center justify-center gap-2 rounded-2xl bg-white border border-slate-200/80 px-3.5 py-2.5 shadow-sm hover:border-emerald-400 hover:shadow-md transition active:scale-95 shrink-0 group"
           >
             <FinanceIcon name="cart" className="h-4 w-4 text-slate-600 transition-transform group-hover:scale-110" />
             <div className="text-left">
@@ -895,7 +906,7 @@ export default function CopilotDashboard({
                 onAddNew();
               }
             }}
-            className="flex items-center gap-2 rounded-2xl bg-white border border-orange-200/80 bg-orange-50/20 px-3.5 py-2.5 shadow-sm hover:border-orange-400 hover:shadow-md transition active:scale-95 shrink-0 group"
+            className="flex items-center justify-center gap-2 rounded-2xl bg-white border border-orange-200/80 bg-orange-50/20 px-3.5 py-2.5 shadow-sm hover:border-orange-400 hover:shadow-md transition active:scale-95 shrink-0 group"
           >
             <FinanceIcon name="utensils" className="h-4 w-4 text-orange-600 transition-transform group-hover:scale-110" />
             <div className="text-left">
@@ -916,7 +927,7 @@ export default function CopilotDashboard({
                 onAddNew();
               }
             }}
-            className="flex items-center gap-2 rounded-2xl bg-white border border-slate-200/80 px-3.5 py-2.5 shadow-sm hover:border-amber-400 hover:shadow-md transition active:scale-95 shrink-0 group"
+            className="flex items-center justify-center gap-2 rounded-2xl bg-white border border-slate-200/80 px-3.5 py-2.5 shadow-sm hover:border-amber-400 hover:shadow-md transition active:scale-95 shrink-0 group"
           >
             <FinanceIcon name="coffee" className="h-4 w-4 text-amber-700 transition-transform group-hover:scale-110" />
             <div className="text-left">
@@ -934,7 +945,7 @@ export default function CopilotDashboard({
                 onAddNew();
               }
             }}
-            className="flex items-center gap-2 rounded-2xl bg-white border border-slate-200/80 px-3.5 py-2.5 shadow-sm hover:border-blue-400 hover:shadow-md transition active:scale-95 shrink-0 group"
+            className="flex items-center justify-center gap-2 rounded-2xl bg-white border border-slate-200/80 px-3.5 py-2.5 shadow-sm hover:border-blue-400 hover:shadow-md transition active:scale-95 shrink-0 group"
           >
             <FinanceIcon name="fuel" className="h-4 w-4 text-slate-600 transition-transform group-hover:scale-110" />
             <div className="text-left">
@@ -952,7 +963,7 @@ export default function CopilotDashboard({
                 onAddNew();
               }
             }}
-            className="flex min-h-11 items-center gap-2 rounded-2xl bg-orange-600 text-white px-3.5 py-2.5 shadow-sm hover:bg-orange-700 transition active:scale-95 shrink-0 group"
+            className="flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-orange-600 text-white px-3.5 py-2.5 shadow-sm hover:bg-orange-700 transition active:scale-95 shrink-0 group"
           >
             <Flame className="h-4 w-4" />
             <div className="text-left">
@@ -989,13 +1000,13 @@ export default function CopilotDashboard({
           </div>
         </div>
 
-        <div className="app-mobile-surface rounded-[24px] bg-white p-4 sm:p-5 shadow-[0_2px_16px_rgba(0,0,0,0.04)] border border-slate-100">
-          <p className="text-center text-[11px] font-bold text-slate-400 mb-3 tracking-tight">
+        <div className={`app-mobile-surface rounded-[24px] bg-white p-4 sm:p-5 shadow-[0_2px_16px_rgba(0,0,0,0.04)] border border-slate-100 ${recentExpenses.length === 0 ? "lg:flex lg:items-center lg:gap-6" : ""}`}>
+          <p className={`text-center text-[11px] font-bold text-slate-400 mb-3 tracking-tight ${recentExpenses.length === 0 ? "lg:mb-0 lg:shrink-0 lg:text-left" : ""}`}>
             Hoy hasta ahora
           </p>
 
           {recentExpenses.length === 0 ? (
-            <div className="py-5 text-center text-xs text-slate-400">
+            <div className={`py-5 text-center text-xs text-slate-400 ${recentExpenses.length === 0 ? "lg:flex-1 lg:py-0 lg:text-left" : ""}`}>
               No hay movimientos pendientes de revisión.
             </div>
           ) : (
@@ -1009,7 +1020,7 @@ export default function CopilotDashboard({
                     key={tx.id}
                     onClick={() => onEditTransaction(tx)}
                     className="flex items-center justify-between cursor-pointer hover:bg-slate-50/80 p-2 rounded-xl transition active:scale-[0.99]"
-                    title="Tocar para editar o cambiar categoría"
+                    title="Seleccionar para editar o cambiar categoría"
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200/80 bg-slate-50 font-black text-slate-700 text-xs shadow-sm">
@@ -1050,7 +1061,7 @@ export default function CopilotDashboard({
             </div>
           )}
 
-          <div className="mt-4 pt-3 border-t border-slate-100">
+          <div className={`mt-4 pt-3 border-t border-slate-100 ${recentExpenses.length === 0 ? "lg:hidden" : ""}`}>
             <button
               onClick={handleToggleReviewed}
               disabled={recentExpenses.length === 0}
@@ -1065,7 +1076,7 @@ export default function CopilotDashboard({
             >
               {recentExpenses.length === 0
                 ? "SIN MOVIMIENTOS PARA REVISAR"
-                : reviewed ? "✓ TODOS REVISADOS (Tocar para desmarcar)" : "MARCAR COMO REVISADO"}
+                : reviewed ? "✓ TODOS REVISADOS (Seleccionar para desmarcar)" : "MARCAR COMO REVISADO"}
             </button>
           </div>
         </div>
@@ -1087,14 +1098,14 @@ export default function CopilotDashboard({
         </div>
 
         {/* Horizontal scrolling ring gauges */}
-        <div className="flex gap-4 overflow-x-auto no-scrollbar py-2 px-1">
+        <div className="flex gap-4 overflow-x-auto no-scrollbar py-2 px-1 lg:justify-around">
           {/* Ring 1: Gastos Superfluos (Al Pedo) */}
           <button
             type="button"
             onClick={() => onOpenTransactions("al_pedo")}
             aria-label="Ver movimientos de gastos Al Pedo"
             className="flex flex-col items-center shrink-0 w-20 text-center cursor-pointer group active:scale-95 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-xl"
-            title="Tocar para filtrar gastos Al Pedo"
+            title="Filtrar gastos Al Pedo"
           >
             <div className="relative flex h-14 w-14 items-center justify-center">
               <svg className="h-14 w-14 -rotate-90" viewBox="0 0 48 48">
@@ -1136,7 +1147,7 @@ export default function CopilotDashboard({
             onClick={() => onOpenTransactions("fijo")}
             aria-label="Ver movimientos de gastos fijos"
             className="flex flex-col items-center shrink-0 w-20 text-center cursor-pointer group active:scale-95 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-xl"
-            title="Tocar para filtrar gastos fijos"
+            title="Filtrar gastos fijos"
           >
             <div className="relative flex h-14 w-14 items-center justify-center">
               <svg className="h-14 w-14 -rotate-90" viewBox="0 0 48 48">
@@ -1170,7 +1181,7 @@ export default function CopilotDashboard({
             onClick={() => onOpenTransactions("variable")}
             aria-label="Ver movimientos de gastos variables"
             className="flex flex-col items-center shrink-0 w-20 text-center cursor-pointer group active:scale-95 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-xl"
-            title="Tocar para filtrar gastos variables"
+            title="Filtrar gastos variables"
           >
             <div className="relative flex h-14 w-14 items-center justify-center">
               <svg className="h-14 w-14 -rotate-90" viewBox="0 0 48 48">
@@ -1303,7 +1314,9 @@ export default function CopilotDashboard({
         </div>
 
         {/* 12 Months Bar Chart - Completely Clickable & Dynamic */}
-        <div className="relative mt-6 pt-6 border-t border-slate-100">
+        <div className="grid grid-cols-1 gap-0 lg:mt-6 lg:grid-cols-5 lg:gap-6">
+        <div className="min-w-0 lg:col-span-3">
+        <div className="relative mt-6 border-t border-slate-100 pt-6 lg:mt-0 lg:border-t-0 lg:pt-0">
           {/* Target Budget Line Indicator with Badge (Image 2 style) */}
           <div className="absolute right-0 top-3 flex items-center gap-1 text-[10px] font-black text-white bg-slate-900 px-2 py-0.5 rounded-md shadow-sm">
             <span>{currencySymbol} {formatMoney(totalBudgeted)}</span>
@@ -1369,7 +1382,9 @@ export default function CopilotDashboard({
         </div>
 
         {/* Categories Breakdown Table (Image 2 style) */}
-        <div className="mt-6 pt-4 border-t border-slate-100 space-y-4">
+        </div>
+        <div className="min-w-0 lg:col-span-2 lg:border-l lg:border-slate-100 lg:pl-6">
+        <div className="mt-6 space-y-4 border-t border-slate-100 pt-4 lg:mt-0 lg:border-t-0 lg:pt-0">
           <p className="text-center text-[10px] font-extrabold tracking-wider text-slate-400 uppercase">
             MÉTRICAS POR RUBRO
           </p>
@@ -1481,6 +1496,8 @@ export default function CopilotDashboard({
             </div>
           </div>
         </div>
+        </div>
+        </div>
       </div>
 
       {/* 5. COPILOT "ACCOUNTS & NET WORTH" (Reference Image 3) */}
@@ -1541,7 +1558,7 @@ export default function CopilotDashboard({
           <div
             onClick={() => setShowAccountModal(true)}
             className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between cursor-pointer hover:bg-slate-50/70 p-2 rounded-2xl transition active:scale-[0.99]"
-            title="Tocar para personalizar cuenta y saldo bancario"
+            title="Abrir para personalizar cuenta y saldo bancario"
           >
             <div className="flex items-center gap-3">
               {/* Mini Credit/Debit Card visual */}
@@ -1579,6 +1596,7 @@ export default function CopilotDashboard({
         </div>
       </div>
 
+      <div className="grid grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-2">
       {/* 6. COPILOT "UPCOMING BILLS" SECTION (Reference Image 3) */}
       <div className="space-y-2">
         <div className="flex items-center justify-between px-1">
@@ -1610,7 +1628,7 @@ export default function CopilotDashboard({
                 key={bill.id}
                 onClick={() => onEditTransaction(bill)}
                 className="rounded-2xl bg-white p-3.5 shadow-sm border border-slate-100 hover:border-slate-200 cursor-pointer transition active:scale-[0.99]"
-                title="Tocar para editar"
+                title="Abrir para editar"
               >
                 <div className="flex items-center justify-between">
                   <span
@@ -1672,6 +1690,7 @@ export default function CopilotDashboard({
         </div>
       </div>
 
+      </div>
       {/* MODAL: Gestionar Cuenta & Saldo Bancario */}
       {showAccountModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4 animate-in fade-in">

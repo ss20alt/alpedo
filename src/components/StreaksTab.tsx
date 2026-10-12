@@ -254,7 +254,7 @@ export default function StreaksTab({ userId, active = true }: StreaksTabProps) {
 
   if (!data) {
     return (
-      <div className="mx-auto max-w-4xl rounded-3xl border border-rose-100 bg-white p-6 text-center shadow-sm">
+      <div className="mx-auto max-w-4xl lg:max-w-[1600px] rounded-3xl border border-rose-100 bg-white p-6 text-center shadow-sm">
         <p className="text-sm font-semibold text-slate-700">{loadError || "No pudimos cargar Rachas."}</p>
         <button
           type="button"
@@ -271,7 +271,7 @@ export default function StreaksTab({ userId, active = true }: StreaksTabProps) {
   const friendCount = data.friends.length;
 
   return (
-    <div className="mx-auto max-w-4xl space-y-4 pb-8 text-slate-900 sm:space-y-6 sm:pb-12">
+    <div className="mx-auto max-w-4xl lg:max-w-[1600px] space-y-4 pb-8 text-slate-900 sm:space-y-6 sm:pb-12">
       {loadError && hasLoadedOnce.current && (
         <div className="flex items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="status">
           <span>No se pudo actualizar Rachas. Se muestra la última información cargada.</span>

@@ -35,12 +35,15 @@ import { formatParaguayMonthLabel, getParaguayMonthString } from "@/lib/date-uti
 import { clearPrefetchedSectionData, prefetchSectionData } from "@/lib/section-data-cache";
 import SectionSkeleton from "@/components/SectionSkeleton";
 
-type PrefetchableTab = "couples" | "challenge" | "streaks";
+type PrefetchableTab = "couples" | "challenge" | "streaks" | "loans" | "transactions" | "grouped" | "settings";
 
 function prefetchSectionModule(tab: PrefetchableTab) {
   if (tab === "couples") void import("@/components/CouplesTab");
   if (tab === "challenge") void import("@/components/ChallengeTab");
   if (tab === "streaks") void import("@/components/StreaksTab");
+  if (tab === "loans") void import("@/components/LoanSimulator");
+  if (tab === "transactions" || tab === "grouped") void import("@/components/TransactionsList");
+  if (tab === "settings") void import("@/components/SettingsTab");
 }
 
 const sectionLoading = () => <SectionSkeleton label="Preparando sección" />;
@@ -59,7 +62,7 @@ function PrivateSection() {
     <div className="rounded-[24px] border border-slate-200 bg-white px-5 py-10 text-center shadow-sm" role="status">
       <EyeOff className="mx-auto h-7 w-7 text-[#1656DB]" aria-hidden="true" />
       <h2 className="mt-3 text-base font-bold text-slate-900">Contenido oculto</h2>
-      <p className="mt-1 text-sm text-slate-600">Tocá el ojo en la barra superior para ver esta sección.</p>
+      <p className="mt-1 text-sm text-slate-600">Usá el ojo de la barra superior para volver a ver esta sección.</p>
     </div>
   );
 }
@@ -562,13 +565,15 @@ export default function Home() {
     <div className="app-viewport bg-[#EEF2F8] text-slate-900 flex flex-col font-sans selection:bg-blue-600 selection:text-white">
       {/* Alpedo app header */}
       <header className="sticky top-0 z-30 bg-gradient-to-b from-[#1252c8] via-[#165bd2] to-[#1b61d7] text-white pt-safe shadow-[0_2px_10px_rgba(15,23,42,0.10)] pb-1 sm:pb-2.5">
-        <div className="relative mx-auto flex max-w-none sm:max-w-2xl md:max-w-4xl items-center justify-between px-2 sm:px-6 pt-0 pb-0 sm:pt-1.5 sm:pb-2">
+        <div className="relative mx-auto flex max-w-none sm:max-w-2xl md:max-w-4xl lg:max-w-[1600px] items-center justify-between px-2 sm:px-6 pt-0 pb-0 sm:pt-1.5 sm:pb-2">
           {/* Left: User Avatar & Settings Trigger */}
           <button
             onClick={() => {
               triggerHaptic("selection");
               setCurrentTab("settings");
             }}
+            onPointerEnter={() => prefetchSectionModule("settings")}
+            onFocus={() => prefetchSectionModule("settings")}
           className="flex min-h-10 items-center gap-1.5 px-1.5 py-1 rounded-full text-white/90 transition active:scale-95 motion-reduce:transition-none hover:text-white hover:bg-white/10"
             title="Mi Perfil & Ajustes"
             aria-label="Ajustes"
@@ -612,7 +617,7 @@ export default function Home() {
                   ? "bg-amber-400/25 text-amber-300 ring-1 ring-amber-400/50 shadow-sm"
                   : "text-white/85 hover:text-white hover:bg-white/10"
               }`}
-              title={privacyMode ? "Modo Privacidad activo (Tocar para ver saldos)" : "Ocultar saldos (Modo Privacidad)"}
+              title={privacyMode ? "Modo Privacidad activo (Mostrar saldos)" : "Ocultar saldos (Modo Privacidad)"}
               aria-label="Modo Privacidad"
             >
               {privacyMode ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
@@ -632,7 +637,7 @@ export default function Home() {
         </div>
 
         {/* Main sections and month selector */}
-        <div className="mx-auto max-w-none sm:max-w-2xl md:max-w-4xl px-2 sm:px-6 pt-0 sm:pt-0.5">
+        <div className="mx-auto max-w-none sm:max-w-2xl md:max-w-4xl lg:max-w-[1600px] px-2 sm:px-6 pt-0 sm:pt-0.5">
           <div className="flex items-center gap-1 py-0 sm:gap-2 sm:py-1">
             {/* Horizontal pill navigation */}
             <nav aria-label="Secciones principales" className="relative min-w-0 flex-1">
@@ -653,6 +658,8 @@ export default function Home() {
                   data-tab="transactions"
                   aria-current={currentTab === "transactions" ? "page" : undefined}
                   onClick={() => setCurrentTab("transactions")}
+                  onPointerEnter={() => prefetchSectionModule("transactions")}
+                  onFocus={() => prefetchSectionModule("transactions")}
                   className={navTabClass("transactions")}
                 >
                   Movimientos
@@ -661,6 +668,8 @@ export default function Home() {
                   data-tab="grouped"
                   aria-current={currentTab === "grouped" ? "page" : undefined}
                   onClick={() => setCurrentTab("grouped")}
+                  onPointerEnter={() => prefetchSectionModule("grouped")}
+                  onFocus={() => prefetchSectionModule("grouped")}
                   className={`${navTabClass("grouped")} hidden md:flex`}
                 >
                   Comercios
@@ -669,6 +678,8 @@ export default function Home() {
                   data-tab="couples"
                   aria-current={currentTab === "couples" ? "page" : undefined}
                   onClick={() => setCurrentTab("couples")}
+                  onPointerEnter={() => prefetchSectionModule("couples")}
+                  onFocus={() => prefetchSectionModule("couples")}
                   className={navTabClass("couples")}
                 >
                   Pareja
@@ -679,6 +690,7 @@ export default function Home() {
                   onClick={() => setCurrentTab("challenge")}
                   className={`${navTabClass("challenge")} hidden md:flex`}
                   onPointerEnter={() => prefetchSectionModule("challenge")}
+                  onFocus={() => prefetchSectionModule("challenge")}
                 >
                   Reto 1%
                 </button>
@@ -688,6 +700,7 @@ export default function Home() {
                   onClick={() => setCurrentTab("streaks")}
                   className={`${navTabClass("streaks")} hidden md:flex`}
                   onPointerEnter={() => prefetchSectionModule("streaks")}
+                  onFocus={() => prefetchSectionModule("streaks")}
                 >
                   Rachas
                 </button>
@@ -695,6 +708,8 @@ export default function Home() {
                   data-tab="loans"
                   aria-current={currentTab === "loans" ? "page" : undefined}
                   onClick={() => setCurrentTab("loans")}
+                  onPointerEnter={() => prefetchSectionModule("loans")}
+                  onFocus={() => prefetchSectionModule("loans")}
                   className={`${navTabClass("loans")} hidden md:flex`}
                 >
                   Préstamos
@@ -776,7 +791,7 @@ export default function Home() {
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         style={{ overflowAnchor: "none" }}
-        className="mx-auto w-full max-w-lg sm:max-w-2xl md:max-w-4xl flex-1 px-3 sm:px-6 py-4 pb-28 md:pb-12"
+        className="mx-auto w-full max-w-lg sm:max-w-2xl md:max-w-4xl lg:max-w-[1600px] flex-1 px-3 sm:px-6 py-4 pb-28 md:pb-12"
       >
         {dataError && <div role="alert" className="mb-4 rounded-2xl border border-rose-200 bg-white p-4 text-sm text-slate-800 shadow-sm">
           <p className="font-bold">No pudimos completar la acción</p>

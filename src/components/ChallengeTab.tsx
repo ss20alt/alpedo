@@ -455,7 +455,7 @@ export default function ChallengeTab({ currencySymbol, userId, active = true }: 
         </div>
 
         {/* 12 Months Cards Grid */}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 2xl:grid-cols-4">
           {challengeMonths.map((m) => (
             <div
               key={m.index}

@@ -543,8 +543,11 @@ export default function TransactionsList({
         <div className="flex items-center justify-between rounded-2xl bg-blue-50/70 border border-blue-100/90 px-3.5 py-2 text-[11px] text-[#1656DB] font-semibold">
           <div className="flex items-center gap-2">
             <FinanceIcon name="moveHorizontal" className="h-4 w-4 shrink-0" />
-            <span>
+            <span className="md:hidden">
               Deslizá un movimiento o tocá <strong>Opciones</strong> para editar, marcar <span className="text-orange-600 font-black">Al Pedo</span> o borrar.
+            </span>
+            <span className="hidden md:inline">
+              Seleccioná un movimiento y abrí <strong>Opciones</strong> para editar, marcar <span className="text-orange-600 font-black">Al Pedo</span> o borrar.
             </span>
           </div>
         </div>
@@ -814,12 +817,12 @@ export default function TransactionsList({
           {/* Hint for mobile swipe */}
           <div className="flex items-center justify-between px-1 text-[11px] text-slate-400 font-medium">
             <span>{visibleTransactions.length} de {historyMode ? remoteTotal : sorted.length} movimiento(s)</span>
-            <span className="hidden sm:inline">Tocar para ver opciones</span>
+            <span className="hidden md:inline">Seleccioná una fila para ver opciones</span>
           </div>
 
           {/* Transactions List with Native Swipe Gestures */}
           {remoteLoading && visibleTransactions.length === 0 ? <p role="status" className="py-10 text-center text-sm text-slate-500">Cargando movimientos…</p> : remoteError && historyMode && visibleTransactions.length === 0 ? null : sorted.length === 0 ? (
-            <div className="py-12 text-center">
+            <div className="py-12 text-center lg:py-8">
               <p className="text-sm font-semibold text-slate-400">No se encontraron movimientos con los filtros aplicados.</p>
               <button
                 onClick={() => {
