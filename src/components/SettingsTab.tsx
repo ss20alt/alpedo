@@ -246,7 +246,7 @@ export default function SettingsTab({
                 {currentUser?.email || ""}
               </p>
               <p className="flex items-center gap-1.5 text-[11px] text-[#1656DB] font-semibold mt-0.5">
-                <Shield className="h-3.5 w-3.5 shrink-0" /> Tus datos están aislados y protegidos por tu PIN
+                <Shield className="h-3.5 w-3.5 shrink-0" /> Iniciá sesión con tu correo y PIN
               </p>
             </div>
           </div>
@@ -261,7 +261,7 @@ export default function SettingsTab({
               {copiedInvite ? (
                 <>
                   <Check className="h-4 w-4 text-emerald-600" />
-                  <span className="text-emerald-700">¡Enlace Copiado!</span>
+                  <span className="text-emerald-700">Enlace copiado</span>
                 </>
               ) : (
                 <>
@@ -300,14 +300,14 @@ export default function SettingsTab({
         </div>
       </div>
 
-      {/* 2. PIN Maestro & Seguridad */}
+      {/* 2. PIN y acceso */}
       <div className="app-mobile-surface rounded-[28px] border border-slate-100 bg-white p-4 sm:p-6 shadow-[0_4px_24px_rgba(0,0,0,0.03)] text-slate-900">
         <h3 className="text-sm sm:text-base font-black text-slate-900 flex items-center gap-2 mb-1">
           <Shield className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-600 shrink-0" />
-          <span>Cambiar PIN Maestro</span>
+          <span>Cambiar PIN</span>
         </h3>
         <p className="text-[11px] sm:text-xs text-slate-500 font-medium mb-4 sm:mb-5">
-          Cambiá la clave de acceso que protege tus finanzas.
+          Actualizá el PIN que usás para iniciar sesión.
         </p>
 
         <form onSubmit={handleChangePin} className="space-y-3.5 sm:space-y-4">
@@ -393,10 +393,10 @@ export default function SettingsTab({
       <div className="app-mobile-surface rounded-[28px] border border-slate-100 bg-white p-4 sm:p-6 shadow-[0_4px_24px_rgba(0,0,0,0.03)] text-slate-900">
         <h3 className="text-sm sm:text-base font-black text-slate-900 flex items-center gap-2 mb-1">
           <Database className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-600 shrink-0" />
-          <span>Respaldo & Portabilidad</span>
+          <span>Respaldos y exportación</span>
         </h3>
         <p className="text-[11px] sm:text-xs text-slate-500 font-medium mb-4 sm:mb-5">
-          Tus datos se guardan en tu base de datos segura. Descargá o restaurá copias en 1 clic.
+          Descargá un respaldo completo o restaurá una copia anterior. También podés exportar tus movimientos en CSV.
         </p>
 
         <div className="space-y-3">
@@ -433,10 +433,10 @@ export default function SettingsTab({
         <div>
           <h3 className="text-sm sm:text-base font-black text-slate-900 flex items-center gap-2 mb-1">
             <Database className="h-4 w-4 sm:h-5 sm:w-5 text-orange-500 shrink-0" />
-            <span>Datos de Ejemplo & Limpieza</span>
+          <span>Datos de prueba</span>
           </h3>
           <p className="text-[11px] sm:text-xs text-slate-500 font-medium mb-3">
-            Administrá los movimientos de tu cuenta.
+            Cargá datos de ejemplo o eliminá los movimientos registrados.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-2">
@@ -464,13 +464,13 @@ export default function SettingsTab({
 
           {seedSuccess && (
             <p className="mt-2 text-xs font-bold text-emerald-600">
-              ¡Datos de ejemplo cargados con éxito!
+              Datos de ejemplo cargados.
             </p>
           )}
 
           {clearSuccess && (
             <p className="mt-2 text-xs font-bold text-emerald-600">
-              ¡Movimientos eliminados! Base limpia para tus finanzas reales.
+              Movimientos eliminados.
             </p>
           )}
           {backupNotice && <p role="status" aria-live="polite" className={`mt-2 text-xs font-bold ${backupNotice.type === "error" ? "text-rose-700" : "text-emerald-700"}`}>{backupNotice.text}</p>}
@@ -483,7 +483,7 @@ export default function SettingsTab({
           <Trash2 className="h-4 w-4" /> Eliminar cuenta
         </h3>
         <p className="mt-2 max-w-2xl text-xs leading-relaxed text-slate-600">
-          Borrá permanentemente tu perfil y sus datos. Antes podés descargar un respaldo completo desde «Respaldo & Portabilidad».
+          Borrá permanentemente tu perfil y sus datos. Antes podés descargar un respaldo completo desde «Respaldos y exportación».
         </p>
         <button type="button" onClick={() => setConfirmDeleteAccount(true)} className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 text-xs font-black text-rose-800 transition hover:bg-rose-100 active:scale-[0.99] sm:w-auto">
           <Trash2 className="h-4 w-4" /> Eliminar mi cuenta y mis datos

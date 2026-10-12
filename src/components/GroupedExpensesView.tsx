@@ -325,7 +325,7 @@ export default function GroupedExpensesView({
               <span>Gastos Agrupados por Concepto</span>
             </h2>
             <p className="hidden sm:block text-[11px] sm:text-xs text-slate-500 font-medium mt-0.5">
-              Acumula automáticamente todo lo gastado bajo el mismo nombre (ej: <strong>Bolt</strong>, <strong>Biggie</strong>, <strong>Jaha</strong>, <strong>Superseis</strong>).
+              Los gastos con el mismo concepto se agrupan para mostrar el total y la frecuencia.
             </p>
           </div>
 

@@ -559,14 +559,14 @@ export default function CueroModal({
               ) : (
                 <>
                   <MessageCircle aria-hidden="true" className="h-4 w-4 text-blue-100" />
-                  <span>Ver recomendación</span>
+                  <span>Consultar compra</span>
                   <ArrowRight aria-hidden="true" className="h-4 w-4" />
                 </>
               )}
             </button>
             <p className="mt-2 flex items-start justify-center gap-1.5 px-1 text-center text-[10px] leading-snug text-slate-400">
               <ShieldCheck aria-hidden="true" className="mt-px h-3.5 w-3.5 shrink-0 text-emerald-600" />
-              <span>La IA puede recibir el monto y un resumen numérico de tus movimientos; no tu correo.</span>
+              <span>Si usás IA, Google Gemini recibe el monto y un resumen numérico de tus movimientos; no tu correo.</span>
             </p>
           </div>
         )}

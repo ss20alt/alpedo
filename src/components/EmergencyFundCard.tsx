@@ -53,13 +53,13 @@ export default function EmergencyFundCard({
           </div>
           <div>
             <h3 className="text-sm sm:text-base font-bold text-white flex items-center gap-1.5">
-              Blindaje & Colchón de Emergencia
+              Fondo de emergencia
               <span className="rounded bg-teal-950 px-1.5 py-0.5 text-[9px] font-bold text-teal-400 border border-teal-800/60 uppercase">
                 Paraguay
               </span>
             </h3>
             <p className="text-[11px] text-slate-400">
-              Fondo de reserva ante imprevistos basado en tus gastos fijos reales.
+              Referencias calculadas a partir de tus gastos fijos registrados.
             </p>
           </div>
         </div>
@@ -73,7 +73,7 @@ export default function EmergencyFundCard({
             className="flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800/80 px-2.5 py-1.5 text-xs font-semibold text-slate-300 hover:text-white hover:border-slate-600 transition active:scale-95"
           >
             <Edit3 className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Actualizar Ahorro</span>
+            <span className="hidden sm:inline">Actualizar monto</span>
           </button>
         ) : null}
       </div>
@@ -147,7 +147,7 @@ export default function EmergencyFundCard({
         <div className="rounded-2xl border border-teal-800/40 bg-teal-950/20 p-3 sm:p-3.5">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-bold uppercase tracking-wider text-teal-400">
-              Colchón Mínimo (3 Meses)
+              Referencia: 3 meses
             </span>
             <span className="text-[10px] font-bold text-teal-300 font-mono">
               3 × Fijos
@@ -157,7 +157,7 @@ export default function EmergencyFundCard({
             {currencySymbol} {formatMoney(analysis.min3Months)}
           </div>
           <p className="text-[10px] text-teal-400/80 mt-0.5">
-            Blindaje básico ante pérdida de trabajo o salud.
+            Equivale a tres meses de gastos fijos.
           </p>
         </div>
 
@@ -165,7 +165,7 @@ export default function EmergencyFundCard({
         <div className="rounded-2xl border border-emerald-800/40 bg-emerald-950/20 p-3 sm:p-3.5">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">
-              Colchón Óptimo (6 Meses)
+              Referencia: 6 meses
             </span>
             <span className="text-[10px] font-bold text-emerald-300 font-mono">
               6 × Fijos
@@ -175,7 +175,7 @@ export default function EmergencyFundCard({
             {currencySymbol} {formatMoney(analysis.opt6Months)}
           </div>
           <p className="text-[10px] text-emerald-400/80 mt-0.5">
-            Paz mental absoluta e inmunidad financiera.
+            Equivale a seis meses de gastos fijos.
           </p>
         </div>
       </div>
@@ -238,22 +238,22 @@ export default function EmergencyFundCard({
           <div className="text-slate-300">
             {analysis.progressMin >= 100 ? (
               <span className="text-emerald-300 font-semibold">
-                <span className="inline-flex items-center gap-1"><ShieldCheck className="h-4 w-4 shrink-0" /> ¡Excelente blindaje! Ya tenés cubierto tu colchón mínimo de 3 meses.</span>
+                <span className="inline-flex items-center gap-1"><ShieldCheck className="h-4 w-4 shrink-0" /> Ya alcanzaste la referencia de 3 meses de gastos fijos.</span>
                 {analysis.progressOpt < 100 && analysis.monthsToOptWithSurplus ? (
                   <span>
-                    {" "}Con tu ahorro actual de {currencySymbol}{" "}
-                    {formatMoney(metrics.netSavings)}/mes, completás los 6 meses en{" "}
+                    {" "}Si se mantiene el ahorro registrado de {currencySymbol}{" "}
+                    {formatMoney(metrics.netSavings)}/mes, podrías llegar a la referencia de 6 meses en{" "}
                     <b>{analysis.monthsToOptWithSurplus} meses</b>.
                   </span>
                 ) : null}
               </span>
             ) : analysis.monthsToMinWithSurplus ? (
               <span>
-                Te faltan <b>{currencySymbol} {formatMoney(analysis.missingForMin)}</b> para el mínimo. Ahorrando tu superávit mensual actual (<b>{currencySymbol} {formatMoney(metrics.netSavings)}</b>), lo completás en solo <b>{analysis.monthsToMinWithSurplus} meses</b>.
+                Te faltan <b>{currencySymbol} {formatMoney(analysis.missingForMin)}</b> para llegar a la referencia de 3 meses. Si se mantiene el margen mensual actual (<b>{currencySymbol} {formatMoney(metrics.netSavings)}</b>), podrías llegar en <b>{analysis.monthsToMinWithSurplus} meses</b>.
               </span>
             ) : (
               <span>
-                Te faltan <b>{currencySymbol} {formatMoney(analysis.missingForMin)}</b> para blindar 3 meses de gastos fijos. Recordá colocar este fondo en una cuenta con rendimiento en Guaraníes (a la vista o CDA escalonado).
+                Te faltan <b>{currencySymbol} {formatMoney(analysis.missingForMin)}</b> para llegar a la referencia de 3 meses. Si formás este fondo, elegí un lugar donde puedas disponer del dinero cuando lo necesites.
               </span>
             )}
           </div>

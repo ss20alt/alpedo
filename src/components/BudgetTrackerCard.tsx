@@ -60,13 +60,13 @@ export default function BudgetTrackerCard({
           </div>
           <div>
             <h3 className="text-sm sm:text-base font-bold text-white flex items-center gap-1.5">
-              Presupuesto Inteligente & Techos
+              Límites de gasto
               <span className="rounded bg-orange-950 px-1.5 py-0.5 text-[9px] font-bold text-orange-400 border border-orange-800/60 uppercase">
                 Semáforo
               </span>
             </h3>
             <p className="text-[11px] text-slate-400">
-              Límites máximos para evitar fugas de plata antes de fin de mes.
+              Definí límites para controlar tus gastos variables y Al Pedo.
             </p>
           </div>
         </div>
@@ -81,7 +81,7 @@ export default function BudgetTrackerCard({
             className="flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800/80 px-2.5 py-1.5 text-xs font-semibold text-slate-300 hover:text-white hover:border-slate-600 transition active:scale-95"
           >
             <Sliders className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Ajustar Topes</span>
+            <span className="hidden sm:inline">Ajustar límites</span>
           </button>
         ) : null}
       </div>
@@ -94,13 +94,13 @@ export default function BudgetTrackerCard({
         >
           <div className="text-xs font-bold text-white flex items-center gap-1.5">
             <Sliders className="h-4 w-4 text-emerald-400" />
-            Configurar Topes Máximos Mensuales
+            Límites mensuales
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-[11px] font-medium text-slate-400 mb-1">
-                <span className="inline-flex items-center gap-1"><Flame className="h-3 w-3 text-orange-400" /> Tope Gastos Al Pedo ({currencySymbol})</span>
+                <span className="inline-flex items-center gap-1"><Flame className="h-3 w-3 text-orange-400" /> Límite para gastos Al Pedo ({currencySymbol})</span>
               </label>
               <input
                 type="number"

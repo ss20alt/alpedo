@@ -527,7 +527,7 @@ export default function CopilotDashboard({
       `Gastos totales: ${currencySymbol} ${formatMoney(metrics.totalExpenses)}\n` +
       `Ahorro neto: ${currencySymbol} ${formatMoney(metrics.netSavings)}\n` +
       `Gastos Al Pedo: ${currencySymbol} ${formatMoney(metrics.expenses.al_pedo)}\n` +
-      `Salud financiera: ${metrics.health.score}/100\n` +
+      `${metrics.totalIncome > 0 ? `Indicador del mes: ${metrics.health.score}/100` : "Indicador del mes: sin datos"}\n` +
       `Controlando mis finanzas con alpedo.app`;
 
     if (typeof navigator !== "undefined" && navigator.share) {
@@ -704,7 +704,9 @@ export default function CopilotDashboard({
           <div className="flex items-center gap-1.5 font-bold text-slate-700">
             <span
               className={`flex h-2 w-2 rounded-full ${
-                metrics.health.score >= 80
+                metrics.totalIncome <= 0
+                  ? "bg-slate-300"
+                  : metrics.health.score >= 80
                   ? "bg-emerald-500"
                   : metrics.health.score >= 50
                   ? "bg-amber-500"
@@ -712,35 +714,40 @@ export default function CopilotDashboard({
               }`}
             />
             <span>
-              Salud:{" "}
+              Indicador:{" "}
               <strong
                 className={
-                  metrics.health.score >= 80
+                  metrics.totalIncome <= 0
+                    ? "text-slate-500"
+                    : metrics.health.score >= 80
                     ? "text-emerald-600"
                     : metrics.health.score >= 50
                     ? "text-amber-600"
                     : "text-red-600"
                 }
               >
-                {metrics.health.score}/100
+                {metrics.totalIncome > 0 ? `${metrics.health.score}/100` : "Sin datos"}
               </strong>
             </span>
           </div>
           <div className="text-center text-slate-600 font-semibold">
             Fijos:{" "}
             <strong className="text-slate-700">
-              {metrics.fixedExpenseRatio.toFixed(1)}%
+              {metrics.totalIncome > 0 ? `${metrics.fixedExpenseRatio.toFixed(1)}%` : "Sin datos"}
             </strong>
           </div>
           <div className="text-right text-slate-600 font-semibold">
-            Superávit:{" "}
+            Margen:{" "}
             <strong
               className={
-                metrics.savingsRate >= 0 ? "text-emerald-600" : "text-red-600"
+                metrics.totalIncome <= 0
+                  ? "text-slate-500"
+                  : metrics.savingsRate >= 0 ? "text-emerald-600" : "text-red-600"
               }
             >
-              {metrics.savingsRate >= 0 ? "+" : ""}
-              {metrics.savingsRate.toFixed(1)}%
+              {metrics.totalIncome > 0
+                ? `${metrics.savingsRate >= 0 ? "+" : ""}${metrics.savingsRate.toFixed(1)}%`
+                : "Sin datos"}
             </strong>
           </div>
         </div>
@@ -778,7 +785,7 @@ export default function CopilotDashboard({
               : "bg-rose-100 text-rose-800"
           }`}>
             <span aria-hidden="true" className={`mr-1 inline-block h-1.5 w-1.5 rounded-full ${spendingPace.status === "optimo" ? "bg-emerald-500" : spendingPace.status === "al_limite" ? "bg-amber-500" : "bg-rose-500"}`} />
-            {!spendingPace.hasBudgetBaseline ? "Sin ingresos" : spendingPace.status === "optimo" ? "Ritmo Óptimo" : spendingPace.status === "al_limite" ? "Al Límite" : "Acelerado"}
+            {!spendingPace.hasBudgetBaseline ? "Sin ingresos" : spendingPace.status === "optimo" ? "Dentro del ritmo" : spendingPace.status === "al_limite" ? "Cerca del límite" : "Por encima del ritmo"}
           </span>
         </div>
 
@@ -1280,14 +1287,18 @@ export default function CopilotDashboard({
             </span>
             <span
               className={`h-2.5 w-2.5 rounded-full ${
-                metrics.totalExpenses > totalBudgeted * 0.9 ? "bg-red-500" : "bg-emerald-500"
+                metrics.totalIncome <= 0
+                  ? "bg-slate-300"
+                  : metrics.totalExpenses > totalBudgeted * 0.9 ? "bg-red-500" : "bg-emerald-500"
               }`}
             />
           </div>
           <p className="text-xs font-semibold text-slate-400 mt-0.5">
-            {metrics.expenses.al_pedo > 0
-              ? `${currencySymbol} ${formatMoney(metrics.expenses.al_pedo)} en gastos superfluos`
-              : "Dentro del rango habitual"}
+            {metrics.totalExpenses <= 0
+              ? "Sin gastos registrados este mes"
+              : metrics.expenses.al_pedo > 0
+                ? `${currencySymbol} ${formatMoney(metrics.expenses.al_pedo)} en gastos Al Pedo`
+                : "Sin gastos Al Pedo este mes"}
           </p>
         </div>
 

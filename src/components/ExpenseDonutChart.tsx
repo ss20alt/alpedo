@@ -140,13 +140,10 @@ export default function ExpenseDonutChart({
           </div>
           <div>
             <h3 className="text-sm sm:text-base font-bold text-white flex items-center gap-1.5">
-              Radiografía de Gastos & Ahorro
-              <span className="rounded bg-emerald-950 px-1.5 py-0.5 text-[9px] font-bold text-emerald-400 border border-emerald-800/60 uppercase">
-                0 ms
-              </span>
+              Distribución de ingresos y gastos
             </h3>
             <p className="text-[11px] text-slate-400">
-              Distribución visual de cada Guaraní ingresado.
+              Así se reparten los ingresos registrados entre gastos y ahorro.
             </p>
           </div>
         </div>

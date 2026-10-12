@@ -11,6 +11,7 @@ interface HealthCardProps {
 
 export default function HealthCard({ metrics }: HealthCardProps) {
   const { health, savingsRate, fixedExpenseRatio, alPedoRatio } = metrics;
+  const hasIncomeData = metrics.totalIncome > 0;
 
   const getIcon = (level: string) => {
     switch (level) {
@@ -51,10 +52,10 @@ export default function HealthCard({ metrics }: HealthCardProps) {
           {/* Circular Score Badge */}
           <div className="relative flex h-20 w-20 sm:h-24 sm:w-24 shrink-0 flex-col items-center justify-center rounded-2xl border border-slate-700/80 bg-slate-950 shadow-inner">
             <span className="text-2xl sm:text-3xl font-black tracking-tight text-white font-mono">
-              {health.score}
+              {hasIncomeData ? health.score : "—"}
             </span>
             <span className="text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-              Puntos / 100
+              {hasIncomeData ? "Puntos / 100" : "Sin datos"}
             </span>
             {/* Visual bottom indicator bar */}
             <div className="absolute bottom-1.5 h-1 w-10 sm:w-12 rounded-full overflow-hidden bg-slate-800">
@@ -70,7 +71,7 @@ export default function HealthCard({ metrics }: HealthCardProps) {
                     ? "bg-orange-400"
                     : "bg-rose-500"
                 }`}
-                style={{ width: `${health.score}%` }}
+                style={{ width: `${hasIncomeData ? health.score : 0}%` }}
               />
             </div>
           </div>
@@ -78,7 +79,7 @@ export default function HealthCard({ metrics }: HealthCardProps) {
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
               <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-widest text-slate-400">
-                Salud Financiera
+                Indicador del mes
               </span>
               <span
                 className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-bold tracking-wide ${health.badgeColor}`}
@@ -106,7 +107,7 @@ export default function HealthCard({ metrics }: HealthCardProps) {
                   : "text-rose-400"
               }`}
             >
-              {savingsRate > 0 ? `+${savingsRate.toFixed(1)}%` : `${savingsRate.toFixed(1)}%`}
+              {hasIncomeData ? (savingsRate > 0 ? `+${savingsRate.toFixed(1)}%` : `${savingsRate.toFixed(1)}%`) : "—"}
             </div>
             <div className="text-[8px] sm:text-[9px] text-slate-500 mt-0.5">Margen</div>
           </div>
@@ -122,7 +123,7 @@ export default function HealthCard({ metrics }: HealthCardProps) {
                   : "text-rose-400"
               }`}
             >
-              {fixedExpenseRatio.toFixed(1)}%
+              {hasIncomeData ? `${fixedExpenseRatio.toFixed(1)}%` : "—"}
             </div>
             <div className="text-[8px] sm:text-[9px] text-slate-500 mt-0.5">Rigidez</div>
           </div>
@@ -138,7 +139,7 @@ export default function HealthCard({ metrics }: HealthCardProps) {
                   : "text-orange-400"
               }`}
             >
-              {alPedoRatio.toFixed(1)}%
+              {hasIncomeData ? `${alPedoRatio.toFixed(1)}%` : "—"}
             </div>
             <div className="text-[8px] sm:text-[9px] text-slate-500 mt-0.5">Fuga</div>
           </div>
@@ -150,7 +151,7 @@ export default function HealthCard({ metrics }: HealthCardProps) {
         <div className="hidden md:block mt-5 rounded-xl border border-slate-800/80 bg-slate-950/60 p-4">
           <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-400 mb-1.5">
             <TrendingUp className="h-4 w-4 shrink-0" />
-            <span>Diagnóstico & Consejos Accionables:</span>
+            <span>Detalles del cálculo</span>
           </div>
           <ul className="space-y-1.5 text-xs text-slate-300">
             {health.recommendations.map((rec, i) => (

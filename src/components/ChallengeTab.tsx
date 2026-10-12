@@ -154,7 +154,7 @@ export default function ChallengeTab({ currencySymbol }: ChallengeTabProps) {
   const progressPercent = Math.round((completedMonths.length / 12) * 100);
 
   const copyShareText = async (monthIndex: number, monthName: string, amount: number, percent: number) => {
-    const text = `¡Hecho! Separé mi ${percent}% de ${monthName} (${currencySymbol} ${formatMoney(amount)}) para el Reto del 1%.\nEl juego es la constancia. Mes ${monthIndex} cumplido.`;
+    const text = `Separé el ${percent}% de mi sueldo de ${monthName} (${currencySymbol} ${formatMoney(amount)}) para el reto de ahorro del 1%.\nMes ${monthIndex} de 12 cumplido.`;
     try {
       await navigator.clipboard.writeText(text);
       setCopiedIndex(monthIndex);
@@ -205,8 +205,7 @@ export default function ChallengeTab({ currencySymbol }: ChallengeTabProps) {
               Arranca el reto del 1%
             </h2>
             <p className="text-xs sm:text-sm text-slate-600 max-w-2xl leading-relaxed font-medium">
-              La regla es una sola: <strong>cada vez que cobres</strong>, antes de gastar en cualquier cosa, separás tu porcentaje correspondiente.
-              ¿Es poco al principio? Sí. Y ese es el punto: <span className="text-blue-700 font-bold">el juego es la constancia, no el monto.</span>
+              Cada vez que cobres, separá el porcentaje del mes antes de destinar el resto. El porcentaje empieza en 1% y aumenta un punto por mes; podés adaptar el monto a tu situación.
             </p>
           </div>
 
@@ -219,7 +218,7 @@ export default function ChallengeTab({ currencySymbol }: ChallengeTabProps) {
             </div>
             <div className="text-[10px] text-slate-500 font-medium mt-1">
               {previewSalary > 0
-                ? "Al completar, habrás separado el 78% de un sueldo mensual"
+                ? "El plan suma el 78% de un sueldo mensual"
                 : "Ingresá tu salario para calcular el plan"}
             </div>
           </div>
@@ -229,8 +228,7 @@ export default function ChallengeTab({ currencySymbol }: ChallengeTabProps) {
         <div className="mt-4 flex items-start gap-2.5 rounded-2xl border border-amber-200 bg-amber-50/70 p-3 text-xs text-amber-950 sm:mt-5 sm:gap-3 sm:p-4">
           <Lightbulb className="h-5 w-5 shrink-0 text-amber-600" />
           <div className="leading-relaxed font-medium">
-            <strong className="text-amber-900 font-bold">Regla de oro:</strong> Separalo en una cuenta aparte, un sobre o una billetera digital (Ueno, Vaquita, Mango, etc.). 
-            <span className="text-orange-700 font-bold"> Que no se mezcle con la plata del día a día.</span>
+              <strong className="text-amber-900 font-bold">Para organizarlo:</strong> podés separar el ahorro en una cuenta, un sobre o una billetera digital. Así queda aparte de tus gastos diarios.
           </div>
         </div>
 
@@ -242,16 +240,16 @@ export default function ChallengeTab({ currencySymbol }: ChallengeTabProps) {
         {/* 3-Step Interactive Methodology */}
         <div className="mt-4 hidden grid-cols-1 gap-2.5 sm:grid sm:grid-cols-3">
           <div className="rounded-xl bg-white/75 border border-orange-100 p-2.5">
-            <div className="text-[11px] font-black text-orange-700">Paso 1: Inicio Sin Fricción</div>
-            <div className="mt-1 text-xs leading-relaxed text-slate-600">El primer mes apartás 1% (ej.: {currencySymbol} {formatMoney(Math.round(previewSalary / 100))}). Empezá con un monto llevadero.</div>
+            <div className="text-[11px] font-black text-orange-700">Mes 1 · Empezá con 1%</div>
+            <div className="mt-1 text-xs leading-relaxed text-slate-600">{previewSalary > 0 ? `Con el sueldo ingresado, 1% equivale a ${currencySymbol} ${formatMoney(Math.round(previewSalary / 100))}.` : "El primer mes corresponde al 1% del sueldo ingresado."}</div>
           </div>
           <div className="rounded-xl border border-orange-100 bg-white/75 p-2.5">
-            <div className="text-[11px] font-black text-orange-700">Paso 2: Hábito Imparable</div>
+            <div className="text-[11px] font-black text-orange-700">Meses 2–11 · Aumentá gradualmente</div>
             <div className="mt-1 text-xs leading-relaxed text-slate-600">Cada mes subís un punto porcentual, de forma gradual y sostenida.</div>
           </div>
           <div className="rounded-xl bg-white/75 border border-orange-100 p-2.5">
-            <div className="text-[11px] font-black text-orange-700">Paso 3: Victoria al Mes 12</div>
-            <div className="mt-1 text-xs leading-relaxed text-slate-600">Completás los 12 meses acumulando casi un sueldo entero como colchón de paz mental.</div>
+            <div className="text-[11px] font-black text-orange-700">Mes 12 · Completá el plan</div>
+            <div className="mt-1 text-xs leading-relaxed text-slate-600">Al completar los 12 meses, el ahorro acumulado equivale al 78% de un sueldo mensual.</div>
           </div>
         </div>
       </div>
@@ -535,7 +533,7 @@ export default function ChallengeTab({ currencySymbol }: ChallengeTabProps) {
 
               {copiedIndex === m.index && (
                 <div className="mt-1 text-center text-[10px] font-bold text-emerald-700" role="status" aria-live="polite">
-                  ¡Copiado para el grupo! Pegalo en WhatsApp.
+                  Mensaje copiado. Ya podés pegarlo en WhatsApp.
                 </div>
               )}
             </div>

@@ -555,9 +555,7 @@ export default function TransactionsList({
           <div className="flex items-center gap-2">
             <FinanceIcon name="store" className="h-4 w-4 shrink-0" />
             <span>
-              <strong>Guía de Comercios:</strong>{" "}
-              <span className="sm:hidden">Agrupamos gastos con el mismo nombre para ver en qué se va tu plata.</span>
-              <span className="hidden sm:inline">Agrupa automáticamente tus gastos repetidos en Biggie, Bolt, súper y combustible para identificar fugas de dinero hormiga.</span>
+              Agrupá los gastos con el mismo concepto para consultar su total y frecuencia.
             </span>
           </div>
         </div>

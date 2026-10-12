@@ -87,13 +87,13 @@ export function calculateFinancialHealth(
 
   if (totalIncome <= 0 && totalExpenses > 0) {
     return {
-      score: 10,
-      level: "SUPER_MALA",
-      label: "Super Mala",
-      badgeColor: "bg-rose-950 text-rose-300 border-rose-800",
-      textColor: "text-rose-500",
-      summary: "Tenés gastos registrados pero ningún ingreso ingresado.",
-      recommendations: ["Cargá tus ingresos para que el sistema pueda evaluar tu salud real."],
+      score: 50,
+      level: "AGUANTABLE",
+      label: "Datos incompletos",
+      badgeColor: "bg-slate-700 text-slate-200 border-slate-600",
+      textColor: "text-slate-400",
+      summary: "Hay gastos registrados, pero faltan ingresos para calcular el balance.",
+      recommendations: ["Cargá tus ingresos para completar este cálculo."],
     };
   }
 
@@ -145,58 +145,58 @@ export function calculateFinancialHealth(
 
   if (score >= 80) {
     level = "EXCELENTE";
-    label = "Excelente";
+    label = "Favorable";
     badgeColor = "bg-emerald-950/80 text-emerald-300 border-emerald-600";
     textColor = "text-emerald-400";
-    summary = "Tus finanzas están sólidas como una roca. Tenés un flujo positivo y gran capacidad de maniobra.";
+    summary = "Según tus registros, los ingresos superan los gastos y queda margen este mes.";
   } else if (score >= 65) {
     level = "BUENA";
-    label = "Buena";
+    label = "Estable";
     badgeColor = "bg-teal-950/80 text-teal-300 border-teal-600";
     textColor = "text-teal-400";
-    summary = "Finanzas ordenadas. Cubrís todas tus necesidades y mantenés un colchón de seguridad mensual.";
+    summary = "El balance registrado es positivo. El margen depende de los gastos que todavía no hayas cargado.";
   } else if (score >= 45) {
     level = "AGUANTABLE";
-    label = "Aguantable";
+    label = "Ajustado";
     badgeColor = "bg-amber-950/80 text-amber-300 border-amber-600";
     textColor = "text-amber-400";
-    summary = "Llegás a fin de mes, pero con margen estrecho. Un imprevisto moderado te puede poner en aprietos.";
+    summary = "El margen calculado es reducido. Un cambio en los ingresos o gastos puede modificar el balance.";
   } else if (score >= 25) {
     level = "MALA";
-    label = "Mala";
+    label = "Limitado";
     badgeColor = "bg-orange-950/80 text-orange-300 border-orange-600";
     textColor = "text-orange-400";
-    summary = "Alerta: Tus gastos están consumiendo casi la totalidad de tus ingresos o estás cerrando en rojo.";
+    summary = "Los gastos registrados consumen gran parte de los ingresos o superan lo que cobrás.";
   } else {
     level = "SUPER_MALA";
-    label = "Super Mala";
+    label = "Crítico";
     badgeColor = "bg-rose-950/90 text-rose-300 border-rose-700";
     textColor = "text-rose-500";
-    summary = "Peligro de asfixia financiera: estás en déficit severo o endeudándote mes a mes para cubrir el costo de vida.";
+    summary = "Los gastos registrados superan ampliamente los ingresos. Revisá el balance antes de sumar nuevos compromisos.";
   }
 
   // Generate actionable tips
   if (alPedoRatio > 15) {
     recommendations.push(
-      `Tus gastos "al pedo" se comen el ${alPedoRatio.toFixed(1)}% de lo que ganás. Frenando esos gustos impulsivos recuperás aire de inmediato.`
+      `Los gastos Al Pedo representan el ${alPedoRatio.toFixed(1)}% de tus ingresos registrados. Revisá cuáles podrías reducir si necesitás más margen.`
     );
   } else if (alPedoRatio <= 8 && expenses.al_pedo > 0) {
     recommendations.push(
-      `¡Buen control de gastos superfluos! Tus gastos prescindibles representan solo el ${alPedoRatio.toFixed(1)}% de tus ingresos.`
+      `Los gastos Al Pedo representan el ${alPedoRatio.toFixed(1)}% de tus ingresos registrados.`
     );
   }
 
   if (fixedExpenseRatio > 65) {
     recommendations.push(
-      `Tus gastos fijos (${fixedExpenseRatio.toFixed(1)}%) son muy altos. Si caen tus ingresos variables o perdés una fuente, te quedás sin margen.`
+      `Los gastos fijos representan el ${fixedExpenseRatio.toFixed(1)}% de tus ingresos. Esto deja menos margen para cambios o imprevistos.`
     );
   }
 
   if (savingsRate > 25) {
-    recommendations.push(`Ahorrás el ${savingsRate.toFixed(1)}% mensual. Buen momento para generar ingresos pasivos o fondo de emergencia.`);
+    recommendations.push(`Este mes queda un ${savingsRate.toFixed(1)}% de tus ingresos después de los gastos registrados. Podés destinar parte a una meta o a un fondo de reserva.`);
   } else if (savingsRate < 0) {
     recommendations.push(
-      `Tenés un déficit de ${Math.abs(savingsRate).toFixed(1)}%. Revisá urgente los gastos variables y prescindibles para no acumular deuda.`
+      `Los gastos superan los ingresos registrados en un ${Math.abs(savingsRate).toFixed(1)}%. Revisá los rubros variables y los movimientos cargados.`
     );
   }
 
@@ -206,7 +206,7 @@ export function calculateFinancialHealth(
   }
 
   if (recommendations.length === 0) {
-    recommendations.push("Mantené el registro diario para tener una radiografía precisa de tus números.");
+    recommendations.push("Seguí registrando ingresos y gastos para que este indicador refleje mejor tus movimientos.");
   }
 
   return {
@@ -400,7 +400,7 @@ export function calculateBudgetGauge(spent: number, limit: number): BudgetGauge 
       remaining: 0,
       isOver: true,
       status: "danger",
-      label: "¡Te pasaste de tu presupuesto!",
+      label: "Límite superado",
       badgeBg: "bg-rose-950/80 text-rose-300 border-rose-700",
       textColor: "text-rose-400",
       progressColor: "bg-rose-500",
@@ -413,7 +413,7 @@ export function calculateBudgetGauge(spent: number, limit: number): BudgetGauge 
       remaining,
       isOver: false,
       status: "warning",
-      label: "¡Alerta de precaución!",
+      label: "Cerca del límite",
       badgeBg: "bg-amber-950/80 text-amber-300 border-amber-700",
       textColor: "text-amber-400",
       progressColor: "bg-amber-500",

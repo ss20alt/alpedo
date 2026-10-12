@@ -324,10 +324,10 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
           <div>
             <div className="app-mobile-kicker inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-100 px-3 py-1 text-xs font-black text-blue-700 mb-3 shadow-sm">
               <Heart className="h-3.5 w-3.5 fill-pink-500 text-pink-500" />
-              Módulo Pareja • Ahorro Juntos
+              Ahorro en pareja
             </div>
             <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
-              Metas Compartidas con tu Pareja
+              Metas compartidas
             </h2>
             <p className="mt-1 text-sm text-slate-600 max-w-xl font-medium">
               Vinculá dos cuentas para compartir una meta y sus aportes. Los movimientos y saldos personales permanecen privados.
@@ -340,7 +340,7 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
               className="app-mobile-primary inline-flex min-h-11 items-center gap-2 self-start rounded-2xl bg-rose-600 px-5 py-3 text-sm font-bold text-white shadow-sm hover:bg-rose-700 transition active:scale-[0.98]"
             >
               <Plus className="h-4 w-4" />
-              Crear Meta Juntos
+              Crear meta
             </button>
           )}
         </div>
@@ -353,7 +353,7 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
               <span>Definí la meta</span>
             </div>
             <p className="mt-1 text-[11px] text-slate-500 font-medium">
-              Elegí qué quieren lograr: Camboriú, el auto o el chanchito común.
+              Elegí qué quieren lograr: un viaje, un auto o una meta común.
             </p>
           </div>
 
@@ -497,7 +497,7 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
             disabled={isSubmitting}
             className="app-mobile-primary w-full min-h-12 rounded-2xl bg-rose-600 text-sm font-bold text-white hover:bg-rose-700 transition active:scale-[0.98]"
           >
-            {isSubmitting ? "Creando meta..." : "¡Iniciar Meta Compartida!"}
+            {isSubmitting ? "Creando meta…" : "Crear meta compartida"}
           </button>
         </form>
       )}
@@ -532,10 +532,10 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
               <PiggyBank className="h-7 w-7 text-blue-600" />
             </div>
             <h3 className="text-lg font-black text-slate-900">
-              Todavía no crearon un chanchito juntos
+              Todavía no hay una meta compartida
             </h3>
             <p className="text-xs text-slate-500 font-medium">
-              Elegí una plantilla rápida o creá una meta a tu medida para empezar a sumar aportes juntos con tu pareja.
+              Elegí una plantilla o ingresá el nombre y el monto que quieren ahorrar.
             </p>
           </div>
 
@@ -696,7 +696,7 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
                   className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-blue-200 bg-white px-4 text-xs font-black text-blue-700 transition hover:bg-blue-100 active:scale-[0.98]"
                 >
                   {copied ? <Check className="h-4 w-4" aria-hidden="true" /> : <Copy className="h-4 w-4" aria-hidden="true" />}
-                  {copied ? "¡Copiado!" : "Copiar código"}
+                  {copied ? "Código copiado" : "Copiar código"}
                 </button>
               </div>
             )}
@@ -742,7 +742,7 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
                   <span className="flex flex-col items-center gap-1"><Wallet className="h-4 w-4" />75% Cerca de la meta</span>
                 </div>
                 <div className={goal.progressPercent >= 100 ? "text-emerald-600 font-bold" : ""}>
-                  <span className="flex flex-col items-center gap-1"><CheckCircle2 className="h-4 w-4" />100% ¡Logrado!</span>
+                  <span className="flex flex-col items-center gap-1"><CheckCircle2 className="h-4 w-4" />Meta alcanzada</span>
                 </div>
               </div>
             </div>
