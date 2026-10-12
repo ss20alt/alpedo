@@ -156,8 +156,11 @@ async function findAccountByFriendCode(code: string) {
   const userId = userIdFromFriendCodeSetting(setting);
   if (!userId) return null;
 
-  const account = await db.queryOne<{ id: number }>("SELECT id FROM users WHERE id = ?", [userId]);
-  return account ? { id: userId } : null;
+  const account = await db.queryOne<{ id: number; name: string }>(
+    "SELECT id, name FROM users WHERE id = ?",
+    [userId]
+  );
+  return account ? { id: Number(account.id), name: account.name } : null;
 }
 
 export async function GET() {
@@ -182,6 +185,16 @@ export async function GET() {
     const friends = await Promise.all(
       friendRows.map(async (friend) => {
         const account = await findAccountByFriendCode(friend.friend_code);
+        if (account && account.id !== user.id) {
+          // Older versions only stored the duel for the person who entered the code.
+          // Create the missing reverse row without overwriting a nickname they chose.
+          await db.execute(
+            `INSERT INTO friend_streaks (user_id, friend_code, friend_name, streak_type)
+             VALUES (?, ?, ?, 'control_al_pedo')
+             ON CONFLICT (user_id, friend_code) DO NOTHING`,
+            [account.id, myFriendCode, user.name || "Amigo"]
+          );
+        }
         const streak = account ? await getStreakDays(account.id) : { days: null, source: "unknown" as const };
         return {
           ...friend,
@@ -218,12 +231,11 @@ export async function POST(req: Request) {
 
     if (body.action === "add_friend") {
       const code = typeof body.friend_code === "string" ? body.friend_code.trim().toUpperCase() : "";
-      const name = typeof body.friend_name === "string" ? body.friend_name.trim() : "";
-      if (!code || !name) {
-        return NextResponse.json({ error: "Ingresá el código y el apodo de tu amigo." }, { status: 400 });
+      if (!code) {
+        return NextResponse.json({ error: "Ingresá el código de invitación." }, { status: 400 });
       }
-      if (code.length > 30 || name.length > 40) {
-        return NextResponse.json({ error: "Revisá el largo del código y del apodo." }, { status: 400 });
+      if (code.length > 30) {
+        return NextResponse.json({ error: "Revisá el largo del código de invitación." }, { status: 400 });
       }
 
       const ownCode = await getOrCreateFriendCode(user.id);
@@ -238,23 +250,77 @@ export async function POST(req: Request) {
           { status: 404 }
         );
       }
+      if (friendAccount.id === user.id) {
+        return NextResponse.json({ error: "Ese es tu propio código. Pedile el suyo a tu amigo." }, { status: 400 });
+      }
 
-      await db.execute(
-        `INSERT INTO friend_streaks (user_id, friend_code, friend_name, streak_type)
-         VALUES (?, ?, ?, 'control_al_pedo')
-         ON CONFLICT (user_id, friend_code) DO UPDATE SET friend_name = EXCLUDED.friend_name`,
-        [user.id, code, name]
+      await db.withTransaction(async () => {
+        // The code owner and the person entering it are linked immediately.
+        // Existing aliases are preserved independently on each account.
+        await db.execute(
+          `INSERT INTO friend_streaks (user_id, friend_code, friend_name, streak_type)
+           VALUES (?, ?, ?, 'control_al_pedo')
+           ON CONFLICT (user_id, friend_code) DO NOTHING`,
+          [user.id, code, friendAccount.name || "Amigo"]
+        );
+        await db.execute(
+          `INSERT INTO friend_streaks (user_id, friend_code, friend_name, streak_type)
+           VALUES (?, ?, ?, 'control_al_pedo')
+           ON CONFLICT (user_id, friend_code) DO NOTHING`,
+          [friendAccount.id, ownCode, user.name || "Amigo"]
+        );
+      });
+
+      return NextResponse.json({ success: true, linkedForBoth: true });
+    }
+
+    if (body.action === "rename_friend") {
+      const code = typeof body.friend_code === "string" ? body.friend_code.trim().toUpperCase() : "";
+      const name = typeof body.friend_name === "string"
+        ? body.friend_name.trim().replace(/\s+/g, " ")
+        : "";
+      if (!code || code.length > 30) {
+        return NextResponse.json({ error: "Revisá el código del duelo." }, { status: 400 });
+      }
+      if (name.length < 2 || name.length > 40) {
+        return NextResponse.json({ error: "El apodo debe tener entre 2 y 40 caracteres." }, { status: 400 });
+      }
+
+      const updated = await db.execute(
+        "UPDATE friend_streaks SET friend_name = ? WHERE user_id = ? AND friend_code = ?",
+        [name, user.id, code]
       );
+      if (updated === 0) {
+        return NextResponse.json({ error: "Ese duelo ya no está en tu lista." }, { status: 404 });
+      }
 
-      return NextResponse.json({ success: true });
+      return NextResponse.json({ success: true, friend_name: name });
     }
 
     if (body.action === "delete_friend") {
       const code = typeof body.friend_code === "string" ? body.friend_code.trim().toUpperCase() : "";
       if (!code) return NextResponse.json({ error: "Código requerido." }, { status: 400 });
 
-      await db.execute("DELETE FROM friend_streaks WHERE user_id = ? AND friend_code = ?", [user.id, code]);
-      return NextResponse.json({ success: true });
+      const existingLink = await db.queryOne<{ id: number }>(
+        "SELECT id FROM friend_streaks WHERE user_id = ? AND friend_code = ?",
+        [user.id, code]
+      );
+      if (!existingLink) {
+        return NextResponse.json({ error: "Ese duelo ya no está en tu lista." }, { status: 404 });
+      }
+
+      const friendAccount = await findAccountByFriendCode(code);
+      const ownCode = await getOrCreateFriendCode(user.id);
+      await db.withTransaction(async () => {
+        await db.execute("DELETE FROM friend_streaks WHERE user_id = ? AND friend_code = ?", [user.id, code]);
+        if (friendAccount && friendAccount.id !== user.id) {
+          await db.execute(
+            "DELETE FROM friend_streaks WHERE user_id = ? AND friend_code = ?",
+            [friendAccount.id, ownCode]
+          );
+        }
+      });
+      return NextResponse.json({ success: true, unlinkedForBoth: true });
     }
 
     if (body.action === "leaderboard_opt_in") {

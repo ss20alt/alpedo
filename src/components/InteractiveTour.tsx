@@ -202,7 +202,7 @@ export const TOUR_STEPS: TourStep[] = [
     headline: "Un chanchito común sin perder privacidad",
     description:
       "Registrá una meta y los aportes que hacen juntos. Los gastos personales de cada cuenta quedan separados.",
-    tip: "El código se puede compartir; la sincronización entre cuentas aún no está disponible.",
+    tip: "La otra persona acepta el código una vez y ambas cuentas ven la misma meta y sus aportes.",
     targetTab: "couples",
     targetSelector: "#tour-couples-card",
     spotlightPadding: 8,
@@ -229,8 +229,8 @@ export const TOUR_STEPS: TourStep[] = [
     icon: <Trophy className="h-4 w-4 text-amber-600" />,
     headline: "¿Quién aguanta más días sin tirar plata?",
     description:
-      "Seguí los días sin gastos marcados como Al Pedo y compará tu avance con códigos Kp.",
-    tip: "Registrá tus gastos cada día para que la racha refleje tu actividad.",
+      "Compartí tu código con un amigo: cuando lo ingrese, ambos quedarán vinculados para comparar sus días de racha. Cada uno puede cambiar el apodo visible.",
+    tip: "El código solo comparte los días de racha, nunca los gastos ni los saldos.",
     targetTab: "streaks",
     targetSelector: "#tour-streaks-card",
     spotlightPadding: 8,

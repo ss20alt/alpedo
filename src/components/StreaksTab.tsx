@@ -5,6 +5,7 @@ import {
   Check,
   Flame,
   LoaderCircle,
+  Pencil,
   RefreshCw,
   Share2,
   ShieldCheck,
@@ -12,6 +13,7 @@ import {
   Trash2,
   Trophy,
   UserRoundPlus,
+  X,
 } from "lucide-react";
 import ConfirmDialog from "@/components/ConfirmDialog";
 
@@ -49,10 +51,12 @@ export default function StreaksTab() {
   const [feedback, setFeedback] = useState("");
   const [copied, setCopied] = useState(false);
   const [inputFriendCode, setInputFriendCode] = useState("");
-  const [inputFriendName, setInputFriendName] = useState("");
   const [isAdding, setIsAdding] = useState(false);
   const [pendingDeleteCode, setPendingDeleteCode] = useState<string | null>(null);
   const [friendToDelete, setFriendToDelete] = useState<FriendStreak | null>(null);
+  const [editingFriendCode, setEditingFriendCode] = useState<string | null>(null);
+  const [editedFriendName, setEditedFriendName] = useState("");
+  const [pendingNameCode, setPendingNameCode] = useState<string | null>(null);
   const [leaderboardName, setLeaderboardName] = useState("");
   const [isSavingLeaderboard, setIsSavingLeaderboard] = useState(false);
 
@@ -80,7 +84,7 @@ export default function StreaksTab() {
   const shareCode = async () => {
     if (!data?.myFriendCode) return;
     setActionError("");
-    const inviteText = `Sumate a mi desafío de Rachas en alpedo.app. Mi código es ${data.myFriendCode}.`;
+    const inviteText = `Sumate a mi desafío de Rachas en alpedo.app. Al ingresar este código, quedamos vinculados en ambas cuentas: ${data.myFriendCode}.`;
 
     try {
       if (navigator.share) {
@@ -127,19 +131,44 @@ export default function StreaksTab() {
         body: JSON.stringify({
           action: "add_friend",
           friend_code: inputFriendCode,
-          friend_name: inputFriendName,
         }),
       });
       if (!response.ok) throw new Error(await readApiError(response, "No se pudo conectar el duelo."));
 
       setInputFriendCode("");
-      setInputFriendName("");
-      setFeedback("Duelo conectado. Ya podés comparar sus días de racha.");
+      setFeedback("Duelo conectado en ambas cuentas. Cada uno puede editar el apodo desde su lista.");
       await fetchStreaksData(false);
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "No se pudo conectar el duelo.");
     } finally {
       setIsAdding(false);
+    }
+  };
+
+  const handleRenameFriend = async (event: React.FormEvent<HTMLFormElement>, friend: FriendStreak) => {
+    event.preventDefault();
+    const nextName = editedFriendName.trim().replace(/\s+/g, " ");
+    if (nextName.length < 2 || nextName.length > 40) return;
+
+    setPendingNameCode(friend.friend_code);
+    setActionError("");
+    setFeedback("");
+    try {
+      const response = await fetch("/api/streaks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "rename_friend", friend_code: friend.friend_code, friend_name: nextName }),
+      });
+      if (!response.ok) throw new Error(await readApiError(response, "No se pudo guardar el apodo."));
+
+      setEditingFriendCode(null);
+      setEditedFriendName("");
+      setFeedback("Apodo actualizado. Solo cambia cómo te aparece a vos.");
+      await fetchStreaksData(false);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "No se pudo guardar el apodo.");
+    } finally {
+      setPendingNameCode(null);
     }
   };
 
@@ -155,7 +184,7 @@ export default function StreaksTab() {
         body: JSON.stringify({ action: "delete_friend", friend_code: friend.friend_code }),
       });
       if (!response.ok) throw new Error(await readApiError(response, "No se pudo eliminar el duelo."));
-      setFeedback(`Se eliminó el duelo con ${friend.friend_name}.`);
+      setFeedback("Duelo desvinculado de ambas cuentas.");
       await fetchStreaksData(false);
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "No se pudo eliminar el duelo.");
@@ -287,7 +316,7 @@ export default function StreaksTab() {
               Desafío entre amigos
             </p>
             <p className="mt-1 pl-8 text-xs leading-relaxed text-slate-600">
-              Con código, comparás solo los días de racha.
+              Un código vincula las dos cuentas para comparar sus días de racha.
             </p>
           </div>
           <div className="rounded-2xl border border-emerald-100 bg-white/85 p-2.5 sm:p-3">
@@ -325,7 +354,7 @@ export default function StreaksTab() {
           </div>
           <p className="mt-2 flex items-start gap-1.5 text-[11px] leading-relaxed text-slate-500">
             <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
-            Compartilo solo con quien quieras sumar. El código permite ver tus días de racha, nunca tus montos.
+            Si alguien ingresa tu código, el duelo queda vinculado en ambas cuentas. Solo se comparten los días de racha, nunca tus montos.
           </p>
         </section>
 
@@ -335,7 +364,7 @@ export default function StreaksTab() {
             <h3 className="text-xs font-black uppercase tracking-wide text-slate-700">Sumar a un amigo</h3>
           </div>
 
-          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          <div className="mt-3">
             <label className="block text-[11px] font-bold text-slate-500">
               Código de invitación
               <input
@@ -351,19 +380,9 @@ export default function StreaksTab() {
                 className="mt-1.5 h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-bold uppercase tracking-wide text-slate-900 outline-none transition placeholder:normal-case placeholder:font-medium placeholder:tracking-normal focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
               />
             </label>
-            <label className="block text-[11px] font-bold text-slate-500">
-              Apodo para identificarlo
-              <input
-                type="text"
-                required
-                maxLength={40}
-                value={inputFriendName}
-                onChange={(event) => setInputFriendName(event.target.value)}
-                placeholder="Ej.: Juan"
-                autoComplete="off"
-                className="mt-1.5 h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-900 outline-none transition placeholder:font-medium focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
-              />
-            </label>
+            <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
+              El duelo aparecerá en ambas cuentas con el nombre del perfil. Después, cada uno puede cambiar cómo ve al otro.
+            </p>
           </div>
 
           <button
@@ -403,7 +422,7 @@ export default function StreaksTab() {
             </div>
             <p className="mt-3 text-sm font-bold text-slate-800">Todavía no tenés duelos</p>
             <p className="mx-auto mt-1 max-w-xs text-xs leading-relaxed text-slate-500">
-              Pedile a un amigo su código de invitación y conectalo arriba para comparar sus rachas.
+              Ingresá el código de alguien. El duelo aparecerá en las dos cuentas con el nombre de cada perfil.
             </p>
           </div>
         ) : (
@@ -416,7 +435,52 @@ export default function StreaksTab() {
                       <Swords className="h-5 w-5" />
                     </div>
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-extrabold text-slate-900">{friend.friend_name}</p>
+                      {editingFriendCode === friend.friend_code ? (
+                        <form onSubmit={(event) => void handleRenameFriend(event, friend)} className="flex min-w-0 items-center gap-1.5">
+                          <label className="sr-only" htmlFor={`friend-name-${friend.friend_code}`}>Apodo de {friend.friend_name}</label>
+                          <input
+                            id={`friend-name-${friend.friend_code}`}
+                            autoFocus
+                            type="text"
+                            required
+                            minLength={2}
+                            maxLength={40}
+                            value={editedFriendName}
+                            onChange={(event) => setEditedFriendName(event.target.value)}
+                            className="h-11 min-w-0 flex-1 rounded-lg border border-blue-200 bg-white px-2 text-sm font-bold text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                          />
+                          <button
+                            type="submit"
+                            disabled={pendingNameCode === friend.friend_code || editedFriendName.trim().length < 2}
+                            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white disabled:opacity-50"
+                            aria-label={`Guardar apodo de ${friend.friend_name}`}
+                          >
+                            {pendingNameCode === friend.friend_code ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={pendingNameCode === friend.friend_code}
+                            onClick={() => { setEditingFriendCode(null); setEditedFriendName(""); }}
+                            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50"
+                            aria-label="Cancelar cambio de apodo"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </form>
+                      ) : (
+                        <div className="flex min-w-0 items-center gap-1.5">
+                          <p className="truncate text-sm font-extrabold text-slate-900">{friend.friend_name}</p>
+                          <button
+                            type="button"
+                            onClick={() => { setEditingFriendCode(friend.friend_code); setEditedFriendName(friend.friend_name); setActionError(""); setFeedback(""); }}
+                            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-blue-50 hover:text-blue-700 active:scale-95"
+                            aria-label={`Cambiar apodo de ${friend.friend_name}`}
+                            title="Cambiar apodo"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                        </div>
+                      )}
                       <p className="truncate font-mono text-[10px] text-slate-500">{friend.friend_code}</p>
                     </div>
                   </div>
@@ -519,7 +583,7 @@ export default function StreaksTab() {
           </p>
         )}
       </section>
-      {friendToDelete && <ConfirmDialog title="¿Eliminar este duelo?" description={`Se quitará el duelo con ${friendToDelete.friend_name}.`} confirmLabel="Eliminar" destructive onCancel={() => setFriendToDelete(null)} onConfirm={() => void handleDeleteFriend(friendToDelete)} />}
+      {friendToDelete && <ConfirmDialog title="¿Desvincular este duelo?" description={`Se quitará de tu lista y de la de ${friendToDelete.friend_name}. Podrán volver a conectarse ingresando sus códigos.`} confirmLabel="Desvincular" destructive onCancel={() => setFriendToDelete(null)} onConfirm={() => void handleDeleteFriend(friendToDelete)} />}
     </div>
   );
 }

@@ -9,7 +9,7 @@ import {
   Gem,
   Target,
   Plus,
-  Share2,
+  Copy,
   CheckCircle2,
   Clock,
   Trash2,
@@ -53,6 +53,39 @@ interface Contribution {
 
 interface CouplesTabProps {
   currencySymbol?: string;
+}
+
+async function copyTextWithFallback(text: string) {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // Clipboard API can be unavailable on the HTTP address used by the VPS.
+    }
+  }
+
+  const textArea = document.createElement("textarea");
+  textArea.value = text;
+  textArea.setAttribute("readonly", "");
+  textArea.setAttribute("aria-hidden", "true");
+  textArea.style.position = "fixed";
+  textArea.style.opacity = "0";
+  textArea.style.pointerEvents = "none";
+  textArea.style.left = "0";
+  textArea.style.top = "0";
+  document.body.appendChild(textArea);
+  textArea.focus();
+  textArea.select();
+  textArea.setSelectionRange(0, text.length);
+
+  let copied = false;
+  try {
+    copied = document.execCommand("copy");
+  } finally {
+    textArea.remove();
+  }
+  return copied;
 }
 
 export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) {
@@ -232,12 +265,13 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
     const inviteCode = goal?.invite_code;
     if (!inviteCode) return;
     try {
-      await navigator.clipboard.writeText(inviteCode);
+      const didCopy = await copyTextWithFallback(inviteCode);
+      if (!didCopy) throw new Error("Clipboard unavailable");
       setCopied(true);
       setNotice({ type: "success", text: "Código copiado. Podés pegarlo en tu mensaje." });
       window.setTimeout(() => setCopied(false), 2500);
     } catch {
-      setNotice({ type: "error", text: "No se pudo copiar el código. Seleccionalo y copialo manualmente." });
+      setNotice({ type: "error", text: "No se pudo copiar. Mantené presionado el código visible para seleccionarlo." });
     }
   };
 
@@ -339,7 +373,7 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
               <span>Compartí el código</span>
             </div>
             <p className="mt-1 text-[11px] text-slate-500 font-medium">
-              Compartí el código y la otra persona lo acepta desde su cuenta para sincronizar el progreso.
+              La otra persona acepta el código una vez y la meta aparece vinculada en ambas cuentas.
             </p>
           </div>
         </div>
@@ -634,16 +668,6 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
               </div>
 
               <div className="flex items-center gap-2 self-start">
-                {goal.isOwner && goal.invite_code && !goal.isShared && (
-                  <button
-                    onClick={copyInvite}
-                    aria-label={copied ? "Código de invitación copiado" : "Copiar código de invitación"}
-                    className="flex min-h-11 items-center gap-1.5 rounded-xl border border-pink-200 bg-pink-50 px-3 text-xs font-black text-pink-700 transition hover:bg-pink-100"
-                  >
-                    <Share2 className="h-3.5 w-3.5" />
-                    {copied ? "¡Copiado!" : "Copiar código"}
-                  </button>
-                )}
                 {goal.isOwner && (
                   <button
                     onClick={() => setConfirmCloseGoal(true)}
@@ -656,6 +680,26 @@ export default function CouplesTab({ currencySymbol = "₲" }: CouplesTabProps) 
                 )}
               </div>
             </div>
+
+            {goal.isOwner && goal.invite_code && !goal.isShared && (
+              <div className="flex flex-col gap-3 rounded-2xl border border-pink-100 bg-pink-50/60 p-3 sm:flex-row sm:items-center sm:justify-between sm:px-4">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-black uppercase tracking-wide text-pink-700">Código para invitar</p>
+                  <code className="mt-1 block select-all break-all font-mono text-sm font-black tracking-wide text-slate-900" aria-label="Código de invitación seleccionable">
+                    {goal.invite_code}
+                  </code>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void copyInvite()}
+                  aria-label={copied ? "Código de invitación copiado" : "Copiar código de invitación"}
+                  className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-pink-200 bg-white px-4 text-xs font-black text-pink-700 transition hover:bg-pink-100 active:scale-[0.98]"
+                >
+                  {copied ? <Check className="h-4 w-4" aria-hidden="true" /> : <Copy className="h-4 w-4" aria-hidden="true" />}
+                  {copied ? "¡Copiado!" : "Copiar código"}
+                </button>
+              </div>
+            )}
 
             {/* Huge Progress Visual */}
             <div className="space-y-3">
